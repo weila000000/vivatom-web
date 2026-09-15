@@ -128,6 +128,9 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
       project.value = createProject(prompt, workspaceId)
       await projectRepository.createWithMessage(project.value, prompt)
       await transition("start_plan")
+    } else if (project.value.status === "draft") {
+      await transition("start_plan")
+      await projectRepository.addUserMessage(project.value.id, prompt)
     } else if (project.value.status === "awaiting_approval") {
       await transition("revise_plan")
       await projectRepository.addUserMessage(project.value.id, prompt)

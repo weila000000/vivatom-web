@@ -257,17 +257,22 @@ async function resolveWithLocal() {
 onBeforeUnmount(() => controller.abort())
 
 async function createProject() {
-  if (project.value?.status === "error" && recovery.value) {
-    await retryRecovery()
-    return
+  try {
+    if (project.value?.status === "error" && recovery.value) {
+      await retryRecovery()
+      return
+    }
+    const requirement = prompt.value.trim()
+    if (!requirement) return
+    await startPlan(requirement, props.workspaceId)
+  } catch (cause) {
+    catalogError.value = cause instanceof Error ? cause.message : "无法开始规划"
   }
-  const requirement = prompt.value.trim()
-  if (!requirement) return
-  await startPlan(requirement, props.workspaceId)
 }
 
 async function approvePlan() {
-  await approveAndBuild(prompt.value.trim())
+  try { await approveAndBuild(prompt.value.trim()) }
+  catch (cause) { catalogError.value = cause instanceof Error ? cause.message : "无法开始构建" }
 }
 
 async function reviseVersion(action: "iterate" | "repair" | "polish") {
