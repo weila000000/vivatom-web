@@ -235,7 +235,14 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
         await rejectCandidate(cause.message)
         return
       }
-      error.value = "版本保存失败，候选源码没有被提交。"
+      error.value = cause instanceof PlatformError && cause.code === "version_conflict"
+        ? cause.message
+        : "版本保存失败，候选源码没有被提交。"
+      if (cause instanceof PlatformError && cause.code === "version_conflict") {
+        candidateSnapshot.value = undefined
+        recovery.value = undefined
+        await projectRepository.clearRecovery(project.value.id)
+      }
       await transition("fail")
     }
   }
