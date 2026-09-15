@@ -184,7 +184,7 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
     if (!source) throw new Error("找不到要恢复的版本")
     if (source.id === activeVersion.value.id) return
     const staged = await restageWorkspaceVersion(workspaceId(), project.value.id, source.id, token())
-    const instruction = `恢复历史版本：${source.snapshot.title}`
+    const instruction = staged.prompt
     await transition("start_iteration")
     await projectRepository.addUserMessage(project.value.id, instruction)
     repairAttempts.value = 0

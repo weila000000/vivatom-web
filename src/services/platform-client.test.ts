@@ -96,7 +96,7 @@ describe("platform client", () => {
   })
 
   it("restages an immutable version as a new candidate", async () => {
-    const candidate = { candidateId: "candidate_2", snapshotHash: "b".repeat(64), snapshot: {} as never }
+    const candidate = { candidateId: "candidate_2", snapshotHash: "b".repeat(64), prompt: "恢复历史版本：Task", snapshot: {} as never }
     const fetcher = vi.fn(async () => new Response(JSON.stringify({ data: candidate }), { status: 201 }))
     await expect(restageWorkspaceVersion("w/1", "p/1", "v/1", "secret", fetcher)).resolves.toEqual(candidate)
     expect(fetcher).toHaveBeenCalledWith("/api/platform/workspaces/w%2F1/projects/p%2F1/versions/v%2F1/restage", expect.objectContaining({ method: "POST" }))
