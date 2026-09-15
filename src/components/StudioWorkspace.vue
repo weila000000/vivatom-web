@@ -152,6 +152,10 @@ function queueSync(value: Project) {
       await captureConflict(value)
       return
     }
+    if (cause instanceof PlatformError && cause.code === "immutable_version_violation") {
+      catalogError.value = "云端拒绝改写已发布版本，请从正式版本创建新的修改。"
+      return
+    }
     catalogError.value = "项目已保存在此设备，云端同步将在网络恢复后重试。"
   })
 }
