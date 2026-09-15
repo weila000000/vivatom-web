@@ -11,7 +11,7 @@ import {
   SnapshotRejectedError,
 } from "../generation/snapshot-guard"
 import { AgentTransportError, runAgent } from "../services/agent-client"
-import { approveWorkspacePlan, commitBuildCandidate, PlatformError } from "../services/platform-client"
+import { approveWorkspacePlan, commitBuildCandidate, PlatformError, restageWorkspaceVersion } from "../services/platform-client"
 import type {
   AgentEvent,
   AgentRequest,
@@ -183,6 +183,7 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
     const source = versions.value.find((version) => version.id === versionId)
     if (!source) throw new Error("找不到要恢复的版本")
     if (source.id === activeVersion.value.id) return
+    const staged = await restageWorkspaceVersion(workspaceId(), project.value.id, source.id, token())
     const instruction = `恢复历史版本：${source.snapshot.title}`
     await transition("start_iteration")
     await projectRepository.addUserMessage(project.value.id, instruction)
@@ -190,9 +191,9 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
     error.value = ""
     events.value = [{ type: "action.status", action: "restore", status: "completed", label: "历史快照已载入，正在重新验证" }]
     projectPrompt.value = instruction
-    candidateSnapshot.value = guardSnapshot(structuredClone(source.snapshot))
-    const request: AgentRequest = { action: "repair", projectId: project.value.id, error: instruction, snapshot: source.snapshot }
-    recovery.value = await projectRepository.saveSnapshotRecovery(project.value.id, request, candidateSnapshot.value, 0)
+    candidateSnapshot.value = guardSnapshot(staged.snapshot)
+    const request: AgentRequest = { action: "repair", projectId: project.value.id, error: instruction, snapshot: staged.snapshot }
+    recovery.value = await projectRepository.saveSnapshotRecovery(project.value.id, request, candidateSnapshot.value, 0, { candidateId: staged.candidateId, snapshotHash: staged.snapshotHash })
   }
 
   async function commitCandidate(snapshot: ProjectSnapshot, prompt: string) {

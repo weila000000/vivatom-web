@@ -202,3 +202,10 @@ export function commitBuildCandidate(
     body: JSON.stringify(input),
   }, fetcher)
 }
+
+export function restageWorkspaceVersion(workspaceId: string, projectId: string, versionId: string, token: string, fetcher?: Fetcher) {
+  return request<{ candidateId: string; snapshotHash: string; snapshot: Version["snapshot"] }>(`/api/platform/workspaces/${encodeURIComponent(workspaceId)}/projects/${encodeURIComponent(projectId)}/versions/${encodeURIComponent(versionId)}/restage`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  }, fetcher)
+}
