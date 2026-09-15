@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
+import { History, RotateCcw } from "@lucide/vue"
 import PreviewPane from "./PreviewPane.vue"
 import { useAgentRun } from "../composables/useAgentRun"
 import { checkServer, type HealthState } from "../services/health"
@@ -31,6 +32,7 @@ const {
   startPlan,
   approveAndBuild,
 	revise,
+  restoreVersion,
   commitCandidate,
   rejectCandidate,
   cancel,
@@ -235,6 +237,11 @@ async function reviseVersion(action: "iterate" | "repair" | "polish") {
   catch (cause) { catalogError.value = cause instanceof Error ? cause.message : "无法开始本轮修改" }
 }
 
+async function restoreHistoricalVersion(versionId: string) {
+  try { await restoreVersion(versionId) }
+  catch (cause) { catalogError.value = cause instanceof Error ? cause.message : "无法恢复历史版本" }
+}
+
 function acceptCompiledSnapshot() {
   if (candidateSnapshot.value) {
     void commitCandidate(candidateSnapshot.value, prompt.value.trim())
@@ -377,8 +384,8 @@ const statusLabels = {
         </div>
 
         <PreviewPane
-          v-if="candidateSnapshot"
-		  :key="`${project?.id}:${repairAttempts}`"
+          v-if="candidateSnapshot && project?.status === 'building'"
+          :key="`${project?.id}:${repairAttempts}`"
           :snapshot="candidateSnapshot"
           @ready="acceptCompiledSnapshot"
           @error="rejectCandidate"
@@ -393,6 +400,16 @@ const statusLabels = {
             <button type="button" :disabled="!prompt.trim() || running" @click="reviseVersion('repair')">修复问题</button>
             <button type="button" :disabled="!prompt.trim() || running" @click="reviseVersion('polish')">润色体验</button>
           </div>
+          <section v-if="versions.length > 1" class="version-history">
+            <h3><History :size="15" />版本历史</h3>
+            <ol>
+              <li v-for="(version, index) in [...versions].reverse()" :key="version.id">
+                <div><strong>版本 {{ versions.length - index }}</strong><small>{{ version.prompt }} · {{ new Date(version.createdAt).toLocaleString() }}</small></div>
+                <span v-if="version.id === activeVersion.id">当前</span>
+                <button v-else type="button" :disabled="project?.status !== 'ready'" aria-label="恢复此版本" @click="restoreHistoricalVersion(version.id)"><RotateCcw :size="15" /></button>
+              </li>
+            </ol>
+          </section>
         </div>
       </section>
     </section>
@@ -403,4 +420,5 @@ const statusLabels = {
 .revision-controls { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 7px; }
 .revision-controls button { min-height: 34px; padding: 0 11px; border: 1px solid #4b4b48; border-radius: 5px; color: #d2d2ce; background: #30302f; cursor: pointer; }
 .revision-controls button:hover { background: #3a3a38; }
+.version-history { margin-top: 18px; padding-top: 16px; border-top: 1px solid #3f3f3d; }.version-history h3 { margin: 0 0 8px; color: #aaa; display: flex; align-items: center; gap: 7px; font-size: 12px; }.version-history ol { margin: 0; padding: 0; list-style: none; }.version-history li { min-height: 48px; padding: 7px 0; border-bottom: 1px solid #383836; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }.version-history li div { min-width: 0; }.version-history li strong, .version-history li small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }.version-history li small { margin-top: 3px; color: #858581; font-size: 10px; }.version-history li > span { color: #78ae88; font-size: 10px; }.version-history li > button { width: 30px; height: 30px; padding: 0; border: 1px solid #474744; border-radius: 5px; color: #bbb; background: #30302f; display: grid; place-items: center; cursor: pointer; }
 </style>

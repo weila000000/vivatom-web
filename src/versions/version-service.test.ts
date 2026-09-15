@@ -16,11 +16,13 @@ describe("createVersion", () => {
   it("stores an immutable copy of the verified snapshot", () => {
     const version = createVersion({
       projectId: "p1",
+      parentVersionId: "previous-version",
       prompt: "任务看板",
       snapshot,
     })
     snapshot.files["/src/main.ts"] = "changed"
     expect(version.snapshot.files["/src/main.ts"]).toBe("const title = 'Task'")
     expect(version.projectId).toBe("p1")
+    expect(version.parentVersionId).toBe("previous-version")
   })
 })

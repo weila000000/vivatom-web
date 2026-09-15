@@ -163,6 +163,23 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
       : { action, projectId: project.value.id, prompt: value, snapshot: activeVersion.value.snapshot })
   }
 
+  async function restoreVersion(versionId: string) {
+    if (!project.value || project.value.status !== "ready" || !activeVersion.value) throw new Error("当前没有可恢复的正式版本")
+    const source = versions.value.find((version) => version.id === versionId)
+    if (!source) throw new Error("找不到要恢复的版本")
+    if (source.id === activeVersion.value.id) return
+    const instruction = `恢复历史版本：${source.snapshot.title}`
+    await transition("start_iteration")
+    await projectRepository.addUserMessage(project.value.id, instruction)
+    repairAttempts.value = 0
+    error.value = ""
+    events.value = [{ type: "action.status", action: "restore", status: "completed", label: "历史快照已载入，正在重新验证" }]
+    projectPrompt.value = instruction
+    candidateSnapshot.value = guardSnapshot(structuredClone(source.snapshot))
+    const request: AgentRequest = { action: "repair", projectId: project.value.id, error: instruction, snapshot: source.snapshot }
+    recovery.value = await projectRepository.saveSnapshotRecovery(project.value.id, request, candidateSnapshot.value, 0)
+  }
+
   async function commitCandidate(snapshot: ProjectSnapshot, prompt: string) {
     if (
       !project.value ||
@@ -338,6 +355,7 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
     startPlan,
     approveAndBuild,
 	revise,
+    restoreVersion,
     commitCandidate,
     rejectCandidate,
     cancel,
