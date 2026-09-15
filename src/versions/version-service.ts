@@ -8,6 +8,7 @@ export interface CreateVersionInput {
   snapshot: ProjectSnapshot
   candidateId?: string
   snapshotHash?: string
+  sourceAction?: Version["sourceAction"]
 }
 
 export function createVersion(input: CreateVersionInput): Version {
@@ -19,6 +20,7 @@ export function createVersion(input: CreateVersionInput): Version {
     snapshot: structuredClone(guardSnapshot(input.snapshot)),
     ...(input.candidateId ? { candidateId: input.candidateId } : {}),
     ...(input.snapshotHash ? { snapshotHash: input.snapshotHash } : {}),
+    sourceAction: input.sourceAction ?? "local",
     createdAt: new Date().toISOString(),
   }
 }

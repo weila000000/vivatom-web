@@ -75,6 +75,8 @@ export interface Version {
   createdAt: string
   candidateId?: string
   snapshotHash?: string
+  sourceAction?: AgentAction | "restore" | "local"
+  approvalId?: string
   build?: {
     toolchain: string
     durationMs: number

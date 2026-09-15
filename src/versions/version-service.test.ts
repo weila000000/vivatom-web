@@ -18,11 +18,13 @@ describe("createVersion", () => {
       projectId: "p1",
       parentVersionId: "previous-version",
       prompt: "任务看板",
-      snapshot,
+	    snapshot,
+	    sourceAction: "local",
     })
     snapshot.files["/src/main.ts"] = "changed"
     expect(version.snapshot.files["/src/main.ts"]).toBe("const title = 'Task'")
     expect(version.projectId).toBe("p1")
-    expect(version.parentVersionId).toBe("previous-version")
+	  expect(version.parentVersionId).toBe("previous-version")
+	  expect(version.sourceAction).toBe("local")
   })
 })

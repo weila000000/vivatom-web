@@ -9,6 +9,7 @@ import { projectRepository, type ProjectSyncConflict } from "../db/project-repos
 import { guardSnapshot } from "../generation/snapshot-guard"
 import { cloneAsConflictCopy, summarizeConflict } from "../services/project-conflict"
 import type { Project } from "../domain/project"
+import type { Version } from "../types/agent"
 import { archiveFilename, buildVersionArchive } from "../versions/artifact-export"
 
 const props = defineProps<{ token: string; workspaceId: string; selectedProjectId?: string }>()
@@ -61,6 +62,20 @@ const canStartPlan = computed(
       project.value.status === "awaiting_approval" ||
       project.value.status === "error"),
 )
+
+function provenanceLabel(version: Version) {
+  const labels: Record<NonNullable<Version["sourceAction"]>, string> = {
+    plan: "方案生成",
+    build: "审批构建",
+    iterate: "功能迭代",
+    repair: "问题修复",
+    polish: "体验打磨",
+    restore: "历史恢复",
+    local: "本地版本",
+  }
+  const label = version.sourceAction ? labels[version.sourceAction] : "旧版本"
+  return version.approvalId ? `${label} · 审批 ${version.approvalId.slice(0, 12)}` : label
+}
 
 onMounted(async () => {
   const [, serverHealth] = await Promise.all([
@@ -427,7 +442,7 @@ const statusLabels = {
             <h3><History :size="15" />版本历史</h3>
             <ol>
               <li v-for="(version, index) in [...versions].reverse()" :key="version.id">
-                <div><strong>版本 {{ versions.length - index }}</strong><small>{{ version.prompt }} · {{ new Date(version.createdAt).toLocaleString() }}</small></div>
+                <div><strong>版本 {{ versions.length - index }}</strong><small>{{ version.prompt }} · {{ provenanceLabel(version) }} · {{ new Date(version.createdAt).toLocaleString() }}</small></div>
                 <span v-if="version.id === activeVersion.id">当前</span>
                 <button v-else type="button" :disabled="project?.status !== 'ready'" aria-label="恢复此版本" @click="restoreHistoricalVersion(version.id)"><RotateCcw :size="15" /></button>
               </li>
