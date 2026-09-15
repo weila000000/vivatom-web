@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { acceptWorkspaceInvitation, approveWorkspacePlan, changeWorkspaceMemberRole, fetchWorkspaceProjectDocument, fetchWorkspaceUsage, inviteWorkspaceMember, listWorkspaceAudit, listWorkspaceMembers, listWorkspaceProjects, loginPlatformAccount, logoutPlatformAccount, PlatformError, recordProjectConflictResolution, removeWorkspaceMember, saveWorkspaceProjectDocument, syncWorkspaceProject } from "./platform-client"
+import { acceptWorkspaceInvitation, approveWorkspacePlan, changeWorkspaceMemberRole, commitBuildCandidate, fetchWorkspaceProjectDocument, fetchWorkspaceUsage, inviteWorkspaceMember, listWorkspaceAudit, listWorkspaceMembers, listWorkspaceProjects, loginPlatformAccount, logoutPlatformAccount, PlatformError, recordProjectConflictResolution, removeWorkspaceMember, saveWorkspaceProjectDocument, syncWorkspaceProject } from "./platform-client"
 
 describe("platform client", () => {
   it("decodes the stable authentication envelope", async () => {
@@ -82,6 +82,16 @@ describe("platform client", () => {
     expect(fetcher).toHaveBeenCalledWith(
       "/api/platform/workspaces/w%2F1/projects/p%2F1/plans/plan%2F1/approve",
       expect.objectContaining({ method: "POST", headers: expect.objectContaining({ Authorization: "Bearer secret" }) }),
+    )
+  })
+
+  it("commits a compiled candidate through the scoped project route", async () => {
+    const version = { id: "version_1", projectId: "p/1", prompt: "任务板", snapshot: {} } as never
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({ data: version }), { status: 201 }))
+    await expect(commitBuildCandidate("w/1", "p/1", "candidate/1", "secret", { snapshotHash: "a".repeat(64), prompt: "任务板" }, fetcher)).resolves.toEqual(version)
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/platform/workspaces/w%2F1/projects/p%2F1/candidates/candidate%2F1/commit",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ snapshotHash: "a".repeat(64), prompt: "任务板" }) }),
     )
   })
 })

@@ -11,7 +11,7 @@ import {
   SnapshotRejectedError,
 } from "../generation/snapshot-guard"
 import { AgentTransportError, runAgent } from "../services/agent-client"
-import { approveWorkspacePlan } from "../services/platform-client"
+import { approveWorkspacePlan, commitBuildCandidate } from "../services/platform-client"
 import type {
   AgentEvent,
   AgentRequest,
@@ -203,19 +203,27 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
     ) {
       return
     }
-    const version = createVersion({
-      projectId: project.value.id,
-      parentVersionId: activeVersion.value?.id,
-      prompt: prompt.trim() || projectPrompt.value,
-      snapshot,
-      candidateId: recovery.value?.phase === "snapshot" ? recovery.value.candidateId : undefined,
-      snapshotHash: recovery.value?.phase === "snapshot" ? recovery.value.snapshotHash : undefined,
-    })
-    const readyProject = {
-      ...transitionProject(project.value, "build_succeeded"),
-      activeVersionId: version.id,
-    }
+    const versionPrompt = prompt.trim() || projectPrompt.value
+    const candidateReceipt = recovery.value?.phase === "snapshot" && recovery.value.candidateId && recovery.value.snapshotHash
+      ? { candidateId: recovery.value.candidateId, snapshotHash: recovery.value.snapshotHash }
+      : undefined
     try {
+      const version = candidateReceipt
+        ? await commitBuildCandidate(workspaceId(), project.value.id, candidateReceipt.candidateId, token(), {
+            snapshotHash: candidateReceipt.snapshotHash,
+            parentVersionId: activeVersion.value?.candidateId ? activeVersion.value.id : undefined,
+            prompt: versionPrompt,
+          })
+        : createVersion({
+            projectId: project.value.id,
+            parentVersionId: activeVersion.value?.id,
+            prompt: versionPrompt,
+            snapshot,
+          })
+      const readyProject = {
+        ...transitionProject(project.value, "build_succeeded"),
+        activeVersionId: version.id,
+      }
       await projectRepository.commitVersion(readyProject, version)
       versions.value.push(version)
       activeVersion.value = version

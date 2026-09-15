@@ -187,3 +187,18 @@ export function approveWorkspacePlan(workspaceId: string, projectId: string, app
     headers: { Authorization: `Bearer ${token}` },
   }, fetcher)
 }
+
+export function commitBuildCandidate(
+  workspaceId: string,
+  projectId: string,
+  candidateId: string,
+  token: string,
+  input: { snapshotHash: string; parentVersionId?: string; prompt: string },
+  fetcher?: Fetcher,
+) {
+  return request<Version>(`/api/platform/workspaces/${encodeURIComponent(workspaceId)}/projects/${encodeURIComponent(projectId)}/candidates/${encodeURIComponent(candidateId)}/commit`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(input),
+  }, fetcher)
+}
