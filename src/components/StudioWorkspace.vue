@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
-import { History, RotateCcw } from "@lucide/vue"
+import { Download, FileCode2, History, RotateCcw } from "@lucide/vue"
 import PreviewPane from "./PreviewPane.vue"
 import { useAgentRun } from "../composables/useAgentRun"
 import { checkServer, type HealthState } from "../services/health"
@@ -9,6 +9,7 @@ import { projectRepository, type ProjectSyncConflict } from "../db/project-repos
 import { guardSnapshot } from "../generation/snapshot-guard"
 import { cloneAsConflictCopy, summarizeConflict } from "../services/project-conflict"
 import type { Project } from "../domain/project"
+import { archiveFilename, buildVersionArchive } from "../versions/artifact-export"
 
 const props = defineProps<{ token: string; workspaceId: string; selectedProjectId?: string }>()
 const emit = defineEmits<{ catalogChanged: [projectId: string]; usageChanged: [] }>()
@@ -46,9 +47,12 @@ const remoteOnly = ref(false)
 const catalogError = ref("")
 const conflict = ref<ProjectSyncConflict>()
 const resolvingConflict = ref(false)
+const selectedSourcePath = ref("")
 let syncPaused = true
 let syncQueue = Promise.resolve()
 const conflictSummary = computed(() => conflict.value ? summarizeConflict(conflict.value.localPayload, conflict.value.cloudDocument.payload) : undefined)
+const sourcePaths = computed(() => Object.keys(activeVersion.value?.snapshot.files ?? {}).sort())
+const selectedSource = computed(() => activeVersion.value?.snapshot.files[selectedSourcePath.value] ?? "")
 const canStartPlan = computed(
   () =>
     !running.value &&
@@ -89,6 +93,8 @@ watch(() => props.selectedProjectId, async (projectId) => {
   }
   await openProject(projectId)
 })
+
+watch(activeVersion, (version) => { selectedSourcePath.value = version?.snapshot.entryFile ?? "" }, { immediate: true })
 
 async function openProject(projectId: string) {
   syncPaused = true
@@ -240,6 +246,17 @@ async function reviseVersion(action: "iterate" | "repair" | "polish") {
 async function restoreHistoricalVersion(versionId: string) {
   try { await restoreVersion(versionId) }
   catch (cause) { catalogError.value = cause instanceof Error ? cause.message : "无法恢复历史版本" }
+}
+
+function downloadActiveVersion() {
+  if (!activeVersion.value) return
+  const bytes = buildVersionArchive(activeVersion.value)
+  const url = URL.createObjectURL(new Blob([bytes.slice().buffer], { type: "application/zip" }))
+  const anchor = document.createElement("a")
+  anchor.href = url
+  anchor.download = archiveFilename(activeVersion.value)
+  anchor.click()
+  URL.revokeObjectURL(url)
 }
 
 function acceptCompiledSnapshot() {
@@ -395,6 +412,8 @@ const statusLabels = {
           <p class="candidate-label">正式版本</p>
           <strong>{{ activeVersion.snapshot.title }}</strong>
           <span>版本 {{ versions.length }} · 已通过沙箱编译</span>
+          <div class="artifact-heading"><h3><FileCode2 :size="15" />正式版本源码</h3><button type="button" title="下载可独立运行的 ZIP" aria-label="下载正式版本" @click="downloadActiveVersion"><Download :size="15" /></button></div>
+          <div class="source-browser"><nav><button v-for="path in sourcePaths" :key="path" type="button" :class="{ active: path === selectedSourcePath }" @click="selectedSourcePath = path">{{ path }}</button></nav><pre><code>{{ selectedSource }}</code></pre></div>
           <div v-if="project?.status === 'ready'" class="revision-controls">
             <button type="button" :disabled="!prompt.trim() || running" @click="reviseVersion('iterate')">迭代功能</button>
             <button type="button" :disabled="!prompt.trim() || running" @click="reviseVersion('repair')">修复问题</button>
@@ -421,4 +440,6 @@ const statusLabels = {
 .revision-controls button { min-height: 34px; padding: 0 11px; border: 1px solid #4b4b48; border-radius: 5px; color: #d2d2ce; background: #30302f; cursor: pointer; }
 .revision-controls button:hover { background: #3a3a38; }
 .version-history { margin-top: 18px; padding-top: 16px; border-top: 1px solid #3f3f3d; }.version-history h3 { margin: 0 0 8px; color: #aaa; display: flex; align-items: center; gap: 7px; font-size: 12px; }.version-history ol { margin: 0; padding: 0; list-style: none; }.version-history li { min-height: 48px; padding: 7px 0; border-bottom: 1px solid #383836; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }.version-history li div { min-width: 0; }.version-history li strong, .version-history li small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }.version-history li small { margin-top: 3px; color: #858581; font-size: 10px; }.version-history li > span { color: #78ae88; font-size: 10px; }.version-history li > button { width: 30px; height: 30px; padding: 0; border: 1px solid #474744; border-radius: 5px; color: #bbb; background: #30302f; display: grid; place-items: center; cursor: pointer; }
+.artifact-heading { margin-top: 18px; display: flex; align-items: center; justify-content: space-between; }.artifact-heading h3 { margin: 0; color: #aaa; display: flex; align-items: center; gap: 7px; font-size: 12px; }.artifact-heading button { width: 30px; height: 30px; padding: 0; border: 1px solid #474744; border-radius: 5px; color: #bbb; background: #30302f; display: grid; place-items: center; cursor: pointer; }.source-browser { height: 300px; margin-top: 8px; border: 1px solid #41413f; display: grid; grid-template-columns: minmax(150px, 30%) minmax(0, 1fr); overflow: hidden; }.source-browser nav { padding: 5px; border-right: 1px solid #41413f; overflow: auto; }.source-browser nav button { width: 100%; min-height: 30px; padding: 5px 7px; border: 0; border-radius: 3px; color: #999; background: transparent; overflow: hidden; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }.source-browser nav button.active { color: #eee; background: #373735; }.source-browser pre { margin: 0; padding: 14px; overflow: auto; color: #c9c9c4; background: #1d1d1c; font-size: 11px; line-height: 1.55; tab-size: 2; }
+@media (max-width: 560px) { .source-browser { height: 380px; grid-template-columns: 1fr; grid-template-rows: 100px minmax(0, 1fr); }.source-browser nav { border-right: 0; border-bottom: 1px solid #41413f; } }
 </style>
