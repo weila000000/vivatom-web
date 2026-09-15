@@ -63,6 +63,19 @@ const canStartPlan = computed(
       project.value.status === "error"),
 )
 
+const agentNames: Record<string, string> = {
+  mike: "产品分析",
+  ava: "方案架构",
+  bob: "前端工程",
+  lin: "数据工程",
+  sam: "质量审查",
+  compiler: "构建验证",
+}
+
+function agentName(agent?: string) {
+  return agent ? agentNames[agent] ?? agent : "系统"
+}
+
 function provenanceLabel(version: Version) {
   const labels: Record<NonNullable<Version["sourceAction"]>, string> = {
     plan: "方案生成",
@@ -382,10 +395,12 @@ const statusLabels = {
         </div>
 
         <p v-if="error" class="error-message">{{ error }}</p>
-        <ol v-else class="event-list">
+        <div v-if="!error" class="agent-run-heading"><span>模型分工</span><small>状态由实时执行事件驱动</small></div>
+        <ol v-if="!error" class="event-list">
           <li v-for="(event, index) in events.filter((item) => item.type !== 'done')" :key="index">
             <i :data-complete="event.status === 'completed' || event.type === 'agent.completed'" />
             <div>
+              <span class="agent-chip">{{ agentName(event.agent) }}</span>
               <strong>{{ event.label || event.message || event.type }}</strong>
               <p v-if="event.text">{{ event.text }}</p>
             </div>

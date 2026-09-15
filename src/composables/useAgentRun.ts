@@ -209,18 +209,27 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
       ? { candidateId: recovery.value.candidateId, snapshotHash: recovery.value.snapshotHash }
       : undefined
     try {
-      const version = candidateReceipt
-        ? await commitBuildCandidate(workspaceId(), project.value.id, candidateReceipt.candidateId, token(), {
+      let version: Version
+      if (candidateReceipt) {
+        const compiling: AgentEvent = { type: "action.status", id: "compile", agent: "compiler", action: "compile_snapshot", status: "running", label: "正在隔离环境中编译候选源码" }
+        events.value.push(compiling)
+        await projectRepository.addAgentEvent(project.value.id, compiling)
+        version = await commitBuildCandidate(workspaceId(), project.value.id, candidateReceipt.candidateId, token(), {
             snapshotHash: candidateReceipt.snapshotHash,
             parentVersionId: activeVersion.value?.candidateId ? activeVersion.value.id : undefined,
             prompt: versionPrompt,
           })
-        : createVersion({
+        const compiled: AgentEvent = { type: "action.status", id: "compile", agent: "compiler", action: "compile_snapshot", status: "completed", label: `隔离编译通过 · ${version.build?.durationMs ?? 0} ms` }
+        events.value.push(compiled)
+        await projectRepository.addAgentEvent(project.value.id, compiled)
+      } else {
+        version = createVersion({
             projectId: project.value.id,
             parentVersionId: activeVersion.value?.id,
             prompt: versionPrompt,
             snapshot,
           })
+      }
       const readyProject = {
         ...transitionProject(project.value, "build_succeeded"),
         activeVersionId: version.id,
