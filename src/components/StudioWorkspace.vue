@@ -450,7 +450,7 @@ const statusLabels = {
         <div v-if="activeVersion" class="version-summary">
           <p class="candidate-label">正式版本</p>
           <strong>{{ activeVersion.snapshot.title }}</strong>
-          <span>版本 {{ versions.length }} · 已通过沙箱编译<span v-if="activeVersion.build">与 {{ activeVersion.build.toolchain }} 服务端验证（{{ activeVersion.build.durationMs }} ms）</span></span>
+          <span>版本 {{ versions.length }}<span v-if="activeVersion.safety"> · 安全策略 {{ activeVersion.safety.policy }}</span><span v-if="activeVersion.build"> · {{ activeVersion.build.toolchain }} 编译通过（{{ activeVersion.build.durationMs }} ms）</span></span>
           <div class="artifact-heading"><h3><FileCode2 :size="15" />正式版本源码</h3><button type="button" title="下载可独立运行的 ZIP" aria-label="下载正式版本" @click="downloadActiveVersion"><Download :size="15" /></button></div>
           <div class="source-browser"><nav><button v-for="path in sourcePaths" :key="path" type="button" :class="{ active: path === selectedSourcePath }" @click="selectedSourcePath = path">{{ path }}</button></nav><pre><code>{{ selectedSource }}</code></pre></div>
           <div v-if="project?.status === 'ready'" class="revision-controls">

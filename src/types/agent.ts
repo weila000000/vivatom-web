@@ -83,6 +83,10 @@ export interface Version {
   snapshotHash?: string
   sourceAction?: AgentAction | "restore" | "local"
   approvalId?: string
+  safety?: {
+    policy: string
+    verifiedAt: string
+  }
   build?: {
     toolchain: string
     durationMs: number
