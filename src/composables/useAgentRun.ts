@@ -11,7 +11,7 @@ import {
   SnapshotRejectedError,
 } from "../generation/snapshot-guard"
 import { AgentTransportError, runAgent } from "../services/agent-client"
-import { approveWorkspacePlan, commitBuildCandidate } from "../services/platform-client"
+import { approveWorkspacePlan, commitBuildCandidate, PlatformError } from "../services/platform-client"
 import type {
   AgentEvent,
   AgentRequest,
@@ -229,7 +229,11 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
       activeVersion.value = version
       project.value = readyProject
       recovery.value = undefined
-    } catch {
+    } catch (cause) {
+      if (cause instanceof PlatformError && cause.code === "compile_failed") {
+        await rejectCandidate(cause.message)
+        return
+      }
       error.value = "版本保存失败，候选源码没有被提交。"
       await transition("fail")
     }
