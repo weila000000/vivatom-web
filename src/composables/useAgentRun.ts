@@ -11,6 +11,7 @@ import {
   SnapshotRejectedError,
 } from "../generation/snapshot-guard"
 import { AgentTransportError, runAgent } from "../services/agent-client"
+import { approveWorkspacePlan } from "../services/platform-client"
 import type {
   AgentEvent,
   AgentRequest,
@@ -62,10 +63,15 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
         events.value.push(event)
         await projectRepository.addAgentEvent(request.projectId, event)
         if (event.type === "approval.required" && event.plan) {
-          plan.value = event.plan
-          await transition("plan_ready", { plan: event.plan })
-          await projectRepository.clearRecovery(request.projectId)
-          recovery.value = undefined
+          if (!event.approvalId) {
+            error.value = "方案审批凭证缺失，请重新生成方案。"
+            await failActiveProject()
+          } else {
+            plan.value = event.plan
+            await transition("plan_ready", { plan: event.plan, approvalId: event.approvalId })
+            await projectRepository.clearRecovery(request.projectId)
+            recovery.value = undefined
+          }
         }
         if (event.type === "snapshot.completed" && event.snapshot) {
           try {
@@ -128,15 +134,20 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
       throw new Error(`项目处于 ${project.value.status}，不能开始规划`)
     }
     plan.value = undefined
+    if (project.value.approvalId) {
+      project.value = { ...project.value, approvalId: undefined }
+      await projectRepository.saveProject(project.value)
+    }
     candidateSnapshot.value = undefined
     projectPrompt.value = prompt
     await execute({ action: "plan", projectId: project.value.id, prompt })
   }
 
   async function approveAndBuild(prompt: string) {
-    if (!project.value || !plan.value) {
+    if (!project.value || !plan.value || !project.value.approvalId) {
       throw new Error("没有可批准的方案")
     }
+    await approveWorkspacePlan(workspaceId(), project.value.id, project.value.approvalId, token())
     await transition("approve")
     candidateSnapshot.value = undefined
 	repairAttempts.value = 0
@@ -144,8 +155,8 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
     await execute({
       action: "build",
       projectId: project.value.id,
+      approvalId: project.value.approvalId,
       prompt: buildPrompt,
-      plan: plan.value,
     })
   }
 

@@ -41,6 +41,7 @@ export interface ProjectSnapshot {
 export interface AgentRequest {
   action: AgentAction
   projectId: string
+  approvalId?: string
   prompt?: string
   plan?: BuildPlan
   snapshot?: ProjectSnapshot
@@ -58,6 +59,7 @@ export interface AgentEvent {
   message?: string
   code?: string
   retryable?: boolean
+  approvalId?: string
   plan?: BuildPlan
   snapshot?: ProjectSnapshot
 }

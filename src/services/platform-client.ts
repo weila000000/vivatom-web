@@ -180,3 +180,10 @@ export function recordProjectConflictResolution(workspaceId: string, projectId: 
 export function fetchWorkspaceUsage(workspaceId: string, token: string, fetcher?: Fetcher) {
   return request<WorkspaceUsage>(`/api/platform/workspaces/${encodeURIComponent(workspaceId)}/usage`, { method: "GET", headers: { Authorization: `Bearer ${token}` } }, fetcher)
 }
+
+export function approveWorkspacePlan(workspaceId: string, projectId: string, approvalId: string, token: string, fetcher?: Fetcher) {
+  return request<void>(`/api/platform/workspaces/${encodeURIComponent(workspaceId)}/projects/${encodeURIComponent(projectId)}/plans/${encodeURIComponent(approvalId)}/approve`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  }, fetcher)
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { acceptWorkspaceInvitation, changeWorkspaceMemberRole, fetchWorkspaceProjectDocument, fetchWorkspaceUsage, inviteWorkspaceMember, listWorkspaceAudit, listWorkspaceMembers, listWorkspaceProjects, loginPlatformAccount, logoutPlatformAccount, PlatformError, recordProjectConflictResolution, removeWorkspaceMember, saveWorkspaceProjectDocument, syncWorkspaceProject } from "./platform-client"
+import { acceptWorkspaceInvitation, approveWorkspacePlan, changeWorkspaceMemberRole, fetchWorkspaceProjectDocument, fetchWorkspaceUsage, inviteWorkspaceMember, listWorkspaceAudit, listWorkspaceMembers, listWorkspaceProjects, loginPlatformAccount, logoutPlatformAccount, PlatformError, recordProjectConflictResolution, removeWorkspaceMember, saveWorkspaceProjectDocument, syncWorkspaceProject } from "./platform-client"
 
 describe("platform client", () => {
   it("decodes the stable authentication envelope", async () => {
@@ -74,5 +74,14 @@ describe("platform client", () => {
     const fetcher = vi.fn(async () => new Response(JSON.stringify({ data: summary }), { status: 200 }))
     await expect(fetchWorkspaceUsage("w/1", "secret", fetcher)).resolves.toEqual(summary)
     expect(fetcher).toHaveBeenCalledWith("/api/platform/workspaces/w%2F1/usage", expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer secret" }) }))
+  })
+
+  it("approves a server plan through the scoped project route", async () => {
+    const fetcher = vi.fn(async () => new Response(null, { status: 204 }))
+    await approveWorkspacePlan("w/1", "p/1", "plan/1", "secret", fetcher)
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/platform/workspaces/w%2F1/projects/p%2F1/plans/plan%2F1/approve",
+      expect.objectContaining({ method: "POST", headers: expect.objectContaining({ Authorization: "Bearer secret" }) }),
+    )
   })
 })

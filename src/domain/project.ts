@@ -25,6 +25,7 @@ export interface Project {
   title: string
   status: ProjectStatus
   plan?: BuildPlan
+  approvalId?: string
   activeVersionId?: string
   cloudRevision?: number
   cloudContentHash?: string
