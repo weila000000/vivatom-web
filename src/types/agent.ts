@@ -17,6 +17,12 @@ export interface BackendSpec {
 }
 
 export interface BuildPlan {
+  requirementBrief?: {
+    goal: string
+    users: string[]
+    coreFlows: string[]
+    constraints: string[]
+  }
   productType: "website" | "web_app"
   productSummary: string
   targetUsers: string[]

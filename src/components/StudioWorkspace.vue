@@ -408,6 +408,12 @@ const statusLabels = {
         </ol>
 
         <div v-if="plan && !candidateSnapshot" class="plan">
+          <template v-if="plan.requirementBrief">
+            <h3>产品分析交付</h3>
+            <p>{{ plan.requirementBrief.goal }}</p>
+            <ul><li v-for="flow in plan.requirementBrief.coreFlows" :key="flow">{{ flow }}</li></ul>
+          </template>
+          <h3>方案架构交付</h3>
           <p>{{ plan.productSummary }}</p>
           <h3>核心功能</h3>
           <ul>
