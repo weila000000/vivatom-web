@@ -413,24 +413,18 @@ const statusLabels = {
         </ol>
 
         <div v-if="plan && !candidateSnapshot" class="plan">
-          <template v-if="plan.requirementBrief">
-            <h3>产品分析交付</h3>
-            <p>{{ plan.requirementBrief.goal }}</p>
-            <ul><li v-for="flow in plan.requirementBrief.coreFlows" :key="flow">{{ flow }}</li></ul>
-          </template>
-          <h3>方案架构交付</h3>
-          <p>{{ plan.productSummary }}</p>
-          <h3>核心功能</h3>
-          <ul>
-            <li v-for="feature in plan.features" :key="feature">{{ feature }}</li>
-          </ul>
-          <button
-            type="button"
-            :disabled="project?.status !== 'awaiting_approval'"
-            @click="approvePlan"
-          >
-            {{ project?.status === "building" ? "准备构建" : "批准并开始构建" }}
-          </button>
+          <header class="approval-header"><div><span>待审批执行合同</span><strong>{{ plan.productType === "web_app" ? "Web 应用" : "网站" }}</strong></div><p>批准后，模型只能按下列范围生成源码。</p></header>
+          <section v-if="plan.requirementBrief" class="plan-section">
+            <h3>产品分析交付</h3><p>{{ plan.requirementBrief.goal }}</p>
+            <div class="plan-columns"><div><strong>目标用户</strong><ul><li v-for="user in plan.requirementBrief.users" :key="user">{{ user }}</li></ul></div><div><strong>核心流程</strong><ul><li v-for="flow in plan.requirementBrief.coreFlows" :key="flow">{{ flow }}</li></ul></div></div>
+            <div v-if="plan.requirementBrief.constraints.length" class="plan-inline"><strong>约束</strong><span v-for="constraint in plan.requirementBrief.constraints" :key="constraint">{{ constraint }}</span></div>
+          </section>
+          <section class="plan-section"><h3>方案架构交付</h3><p>{{ plan.productSummary }}</p><div class="plan-inline"><strong>设计方向</strong><span>{{ plan.designDirection }}</span></div></section>
+          <section class="plan-section"><h3>功能与页面</h3><div class="plan-columns"><div><strong>核心功能</strong><ul><li v-for="feature in plan.features" :key="feature">{{ feature }}</li></ul></div><div><strong>页面范围</strong><dl><template v-for="page in plan.pages" :key="page.name"><dt>{{ page.name }}</dt><dd>{{ page.purpose }}</dd></template></dl></div></div></section>
+          <section class="plan-section"><h3>源码范围</h3><ul class="plan-files"><li v-for="file in plan.filePlan" :key="file.path"><code>{{ file.path }}</code><span>{{ file.responsibility }}</span></li></ul></section>
+          <section class="plan-section"><h3>数据与权限</h3><p v-if="!plan.backend.enabled">本次产品不创建服务端数据模型。</p><template v-else><div class="plan-inline"><strong>认证</strong><span>{{ plan.backend.auth === "email_password" ? "邮箱密码认证" : "无需登录" }}</span></div><ul class="plan-files"><li v-for="collection in plan.backend.collections" :key="collection.name"><code>{{ collection.name }}</code><span>{{ collection.label }} · {{ collection.access === "owner" ? "仅数据所有者" : "公开访问" }} · {{ collection.fields.length }} 个字段</span></li></ul></template></section>
+          <section class="plan-section"><h3>验收标准</h3><ol class="acceptance-list"><li v-for="check in plan.acceptanceChecks" :key="check">{{ check }}</li></ol></section>
+          <footer class="approval-actions"><p>批准会锁定当前需求与完整方案，并生成一次性审批凭证。</p><button type="button" :disabled="project?.status !== 'awaiting_approval'" @click="approvePlan">批准并开始构建</button></footer>
         </div>
 
         <div v-if="candidateSnapshot && project?.status === 'building'" class="candidate">
