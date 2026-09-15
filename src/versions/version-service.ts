@@ -6,6 +6,8 @@ export interface CreateVersionInput {
   parentVersionId?: string
   prompt: string
   snapshot: ProjectSnapshot
+  candidateId?: string
+  snapshotHash?: string
 }
 
 export function createVersion(input: CreateVersionInput): Version {
@@ -15,6 +17,8 @@ export function createVersion(input: CreateVersionInput): Version {
     ...(input.parentVersionId ? { parentVersionId: input.parentVersionId } : {}),
     prompt: input.prompt,
     snapshot: structuredClone(guardSnapshot(input.snapshot)),
+    ...(input.candidateId ? { candidateId: input.candidateId } : {}),
+    ...(input.snapshotHash ? { snapshotHash: input.snapshotHash } : {}),
     createdAt: new Date().toISOString(),
   }
 }

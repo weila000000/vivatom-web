@@ -97,8 +97,9 @@ export class ProjectRepository {
     request: AgentRequest,
     snapshot: ProjectSnapshot,
     repairAttempts = 0,
+    candidate?: { candidateId: string; snapshotHash: string },
   ): Promise<AgentRunRecovery> {
-    return this.saveRecovery({ projectId, phase: "snapshot", request, snapshot, repairAttempts })
+    return this.saveRecovery({ projectId, phase: "snapshot", request, snapshot, repairAttempts, ...candidate })
   }
 
   private async saveRecovery(
@@ -110,6 +111,8 @@ export class ProjectRepository {
           request: AgentRequest
           snapshot: ProjectSnapshot
           repairAttempts?: number
+          candidateId?: string
+          snapshotHash?: string
         },
   ): Promise<AgentRunRecovery> {
     const existing = await this.database.agentRuns.get(input.projectId)

@@ -60,6 +60,8 @@ export interface AgentEvent {
   code?: string
   retryable?: boolean
   approvalId?: string
+  candidateId?: string
+  snapshotHash?: string
   plan?: BuildPlan
   snapshot?: ProjectSnapshot
 }
@@ -71,6 +73,8 @@ export interface Version {
   prompt: string
   snapshot: ProjectSnapshot
   createdAt: string
+  candidateId?: string
+  snapshotHash?: string
 }
 
 interface RecoveryBase {
@@ -86,4 +90,6 @@ export type AgentRunRecovery =
   | (RecoveryBase & {
       phase: "snapshot"
       snapshot: ProjectSnapshot
+      candidateId?: string
+      snapshotHash?: string
     })

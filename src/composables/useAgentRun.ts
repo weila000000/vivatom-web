@@ -75,12 +75,16 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
         }
         if (event.type === "snapshot.completed" && event.snapshot) {
           try {
+            if (!event.candidateId || !event.snapshotHash) {
+              throw new Error("candidate receipt missing")
+            }
             candidateSnapshot.value = guardSnapshot(event.snapshot)
             recovery.value = await projectRepository.saveSnapshotRecovery(
               request.projectId,
               request,
               candidateSnapshot.value,
               attempts,
+              { candidateId: event.candidateId, snapshotHash: event.snapshotHash },
             )
           } catch (cause) {
             error.value =
@@ -204,6 +208,8 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
       parentVersionId: activeVersion.value?.id,
       prompt: prompt.trim() || projectPrompt.value,
       snapshot,
+      candidateId: recovery.value?.phase === "snapshot" ? recovery.value.candidateId : undefined,
+      snapshotHash: recovery.value?.phase === "snapshot" ? recovery.value.snapshotHash : undefined,
     })
     const readyProject = {
       ...transitionProject(project.value, "build_succeeded"),
