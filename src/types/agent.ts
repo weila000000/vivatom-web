@@ -75,6 +75,11 @@ export interface Version {
   createdAt: string
   candidateId?: string
   snapshotHash?: string
+  build?: {
+    toolchain: string
+    durationMs: number
+    verifiedAt?: string
+  }
 }
 
 interface RecoveryBase {
