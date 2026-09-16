@@ -10,6 +10,9 @@ const state = ref<"checking" | "loading" | "ready" | "error">("checking")
 const controller = new AbortController()
 let runtimeBridge: ((event: MessageEvent) => void) | undefined
 let loadTimeout: number | undefined
+let frameLoaded = false
+let runtimeReady = false
+let requiresRuntime = false
 
 onMounted(async () => {
   const target = parseHostedPreviewTarget(window.location.search, window.location.hash)
@@ -22,6 +25,7 @@ onMounted(async () => {
     await verifyHostedPreviewTarget(target, controller.signal)
     if (controller.signal.aborted) return
     state.value = "loading"
+    requiresRuntime = Boolean(target.publicKey)
     artifactUrl.value = target.artifactUrl
     loadTimeout = window.setTimeout(() => fail("正式版本加载超时，请稍后重试。"), 15000)
     if (target.publicKey) {
@@ -30,6 +34,10 @@ onMounted(async () => {
         publicKey: target.publicKey,
         apiBaseUrl: window.location.origin,
         getPreviewWindow: () => iframe.value?.contentWindow ?? null,
+        onReady: () => {
+          runtimeReady = true
+          completeWhenReady()
+        },
       })
       runtimeBridge = (event) => { void bridge(event) }
       window.addEventListener("message", runtimeBridge)
@@ -39,7 +47,13 @@ onMounted(async () => {
   }
 })
 
-function ready() {
+function frameReady() {
+  frameLoaded = true
+  completeWhenReady()
+}
+
+function completeWhenReady() {
+  if (!frameLoaded || (requiresRuntime && !runtimeReady)) return
   if (loadTimeout !== undefined) window.clearTimeout(loadTimeout)
   state.value = "ready"
 }
@@ -66,7 +80,7 @@ onBeforeUnmount(() => {
       :src="artifactUrl"
       title="Vivatom 正式版本预览"
       sandbox="allow-forms allow-modals allow-popups allow-presentation allow-scripts"
-      @load="ready"
+      @load="frameReady"
       @error="fail('正式版本加载失败。')"
     />
     <p v-if="state !== 'ready'">{{ error || (state === "checking" ? "正在验证正式版本..." : "正在加载正式版本...") }}</p>

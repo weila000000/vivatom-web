@@ -1,5 +1,6 @@
 export const previewRuntimeRequestType = "vivatom:runtime-request"
 export const previewRuntimeResponseType = "vivatom:runtime-response"
+export const previewRuntimeReadyType = "vivatom:runtime-ready"
 
 type RuntimeMethod = "GET" | "POST" | "PATCH" | "DELETE"
 
@@ -19,6 +20,7 @@ interface BridgeOptions {
   apiBaseUrl: string
   getPreviewWindow(): Window | null
   fetchRuntime?: typeof fetch
+  onReady?(): void
 }
 
 function safeSegment(segment: string): boolean {
@@ -68,6 +70,10 @@ export function createPreviewRuntimeBridge(options: BridgeOptions) {
   return async (event: Pick<MessageEvent, "source" | "origin" | "data">): Promise<void> => {
     const previewWindow = options.getPreviewWindow()
     if (!previewWindow || event.source !== previewWindow) return
+    if (event.data?.type === previewRuntimeReadyType && event.data?.projectId === options.projectId) {
+      options.onReady?.()
+      return
+    }
     const request = parseRequest(event.data, options.projectId)
     if (!request) return
     const responseOrigin = event.origin === "null" ? "*" : event.origin

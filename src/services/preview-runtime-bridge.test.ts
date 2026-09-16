@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { createPreviewRuntimeBridge, previewRuntimeRequestType, previewRuntimeResponseType } from "./preview-runtime-bridge"
+import { createPreviewRuntimeBridge, previewRuntimeReadyType, previewRuntimeRequestType, previewRuntimeResponseType } from "./preview-runtime-bridge"
 
 const projectId = "project-1"
 const origin = "https://preview.example.test"
@@ -44,5 +44,19 @@ describe("preview runtime bridge", () => {
     await bridge({ source: previewWindow, origin: "null", data: { type: previewRuntimeRequestType, id: "opaque", projectId, path: "/collections/tasks", method: "GET" } })
 
     expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({ id: "opaque", ok: true }), "*")
+  })
+
+  it("accepts readiness only from the bound window and project", async () => {
+    const previewWindow = { postMessage: vi.fn() } as unknown as Window
+    const otherWindow = { postMessage: vi.fn() } as unknown as Window
+    const onReady = vi.fn()
+    const bridge = createPreviewRuntimeBridge({ projectId, publicKey: "public-key", apiBaseUrl: "", getPreviewWindow: () => previewWindow, fetchRuntime: vi.fn(), onReady })
+
+    await bridge(message(otherWindow, { type: previewRuntimeReadyType, projectId }))
+    await bridge(message(previewWindow, { type: previewRuntimeReadyType, projectId: "other" }))
+    expect(onReady).not.toHaveBeenCalled()
+
+    await bridge(message(previewWindow, { type: previewRuntimeReadyType, projectId }))
+    expect(onReady).toHaveBeenCalledOnce()
   })
 })
