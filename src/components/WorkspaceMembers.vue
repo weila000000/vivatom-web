@@ -73,6 +73,7 @@ function actionLabel(event: AuditEvent) {
         ? `取消了${agentActionLabel(event.metadata.action)}`
         : `${agentActionLabel(event.metadata.action)}失败（${event.metadata.resultCode ?? "unknown"}）`,
     "candidate.rejected": `拒绝了过期候选（${event.metadata.reason ?? "unknown"}）`,
+    "candidate.compile_failed": `候选编译失败（${event.metadata.resultCode ?? "unknown"}）`,
     "version.restaged": "从历史版本创建了恢复候选",
     "version.committed": "提交并激活了不可变版本",
   }
