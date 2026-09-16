@@ -47,6 +47,9 @@ export async function* parseSSE(stream: ReadableStream<Uint8Array>): AsyncGenera
         const event = parseBlock(buffer.slice(0, boundary))
         buffer = buffer.slice(boundary + 2)
         if (event) {
+          if (sawDone) {
+            throw new AgentTransportError("invalid_sse", "Agent 在终止后继续发送事件")
+          }
           if (event.type === "done") sawDone = true
           yield event
         }
@@ -57,6 +60,9 @@ export async function* parseSSE(stream: ReadableStream<Uint8Array>): AsyncGenera
     if (tail) {
       const event = parseBlock(tail)
       if (event) {
+        if (sawDone) {
+          throw new AgentTransportError("invalid_sse", "Agent 在终止后继续发送事件")
+        }
         if (event.type === "done") sawDone = true
         yield event
       }

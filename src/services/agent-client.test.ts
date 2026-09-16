@@ -57,4 +57,16 @@ describe("parseSSE", () => {
     }
     await expect(read()).rejects.toMatchObject({ code: "incomplete_stream" })
   })
+
+  it("rejects events after the terminal event", async () => {
+    const stream = streamFrom([
+      'event: done\ndata: {"type":"done"}\n\nevent: agent.started\ndata: {"type":"agent.started"}\n\n',
+    ])
+    const read = async () => {
+      for await (const _event of parseSSE(stream)) {
+        // Consume the stream.
+      }
+    }
+    await expect(read()).rejects.toMatchObject({ code: "invalid_sse" })
+  })
 })
