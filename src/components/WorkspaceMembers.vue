@@ -51,6 +51,10 @@ async function remove(member: WorkspaceMember) {
 
 async function copyToken() { if (invitation.value) await navigator.clipboard.writeText(invitation.value.token) }
 function message(cause: unknown) { return cause instanceof PlatformError ? cause.message : "成员服务暂时不可用" }
+function agentActionLabel(value: unknown) {
+  const labels: Record<string, string> = { plan: "需求规划", build: "源码构建", iterate: "功能迭代", repair: "问题修复", polish: "体验打磨" }
+  return typeof value === "string" ? labels[value] ?? value : "Agent 任务"
+}
 function actionLabel(event: AuditEvent) {
   const labels: Record<string, string> = {
     "member.invited": "创建了成员邀请",
@@ -61,6 +65,16 @@ function actionLabel(event: AuditEvent) {
     "project.metadata_updated": "更新了项目状态",
     "project.document_saved": `保存了项目内容（版本 ${event.metadata.revision ?? "-"}）`,
     "project.conflict_resolved": `处理了同步冲突（保留${event.metadata.choice === "cloud" ? "云端" : "本地"}）`,
+    "plan.approved": "批准了工程方案",
+    "agent.started": `启动了${agentActionLabel(event.metadata.action)}`,
+    "agent.completed": event.metadata.status === "succeeded"
+      ? `完成了${agentActionLabel(event.metadata.action)}`
+      : event.metadata.status === "cancelled"
+        ? `取消了${agentActionLabel(event.metadata.action)}`
+        : `${agentActionLabel(event.metadata.action)}失败（${event.metadata.resultCode ?? "unknown"}）`,
+    "candidate.rejected": `拒绝了过期候选（${event.metadata.reason ?? "unknown"}）`,
+    "version.restaged": "从历史版本创建了恢复候选",
+    "version.committed": "提交并激活了不可变版本",
   }
   return labels[event.action] ?? "更新了工作区"
 }
