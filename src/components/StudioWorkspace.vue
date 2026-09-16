@@ -54,6 +54,7 @@ let syncQueue = Promise.resolve()
 const conflictSummary = computed(() => conflict.value ? summarizeConflict(conflict.value.localPayload, conflict.value.cloudDocument.payload) : undefined)
 const sourcePaths = computed(() => Object.keys(activeVersion.value?.snapshot.files ?? {}).sort())
 const selectedSource = computed(() => activeVersion.value?.snapshot.files[selectedSourcePath.value] ?? "")
+const requirementChanged = computed(() => prompt.value.trim() !== projectPrompt.value.trim())
 const canStartPlan = computed(
   () =>
     !running.value &&
@@ -271,7 +272,7 @@ async function createProject() {
 }
 
 async function approvePlan() {
-  try { await approveAndBuild(prompt.value.trim()) }
+  try { await approveAndBuild(projectPrompt.value.trim() || prompt.value.trim()) }
   catch (cause) { catalogError.value = cause instanceof Error ? cause.message : "无法开始构建" }
 }
 
@@ -352,19 +353,30 @@ const statusLabels = {
           rows="6"
           :disabled="running || project?.status === 'building'"
         />
-        <button v-if="project?.status !== 'ready'" type="submit" :disabled="!prompt.trim() || !canStartPlan">
+        <button
+          v-if="project?.status === 'awaiting_approval' && !requirementChanged"
+          type="button"
+          :disabled="running || !plan || !project.approvalId"
+          @click="approvePlan"
+        >
+          批准并开始构建
+          <span aria-hidden="true">→</span>
+        </button>
+        <button v-else-if="project?.status === 'building'" type="button" disabled>
+          正在构建
+          <span aria-hidden="true">→</span>
+        </button>
+        <button v-else-if="project?.status !== 'ready'" type="submit" :disabled="!prompt.trim() || !canStartPlan">
           {{
             running
               ? "正在规划"
               : project?.status === "awaiting_approval"
-                ? "重新规划"
+                ? "按新需求重新规划"
                 : project?.status === "error"
                   ? recovery
                     ? "从检查点重试"
                     : "重试规划"
-                  : project?.status === "building"
-                    ? "准备构建"
-                    : "创建项目"
+                  : "创建项目"
           }}
           <span aria-hidden="true">→</span>
         </button>
