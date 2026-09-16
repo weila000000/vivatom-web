@@ -59,4 +59,37 @@ describe("preview runtime bridge", () => {
     await bridge(message(previewWindow, { type: previewRuntimeReadyType, projectId }))
     expect(onReady).toHaveBeenCalledOnce()
   })
+
+  it("rejects invalid and oversized bodies before fetch", async () => {
+    const postMessage = vi.fn()
+    const previewWindow = { postMessage } as unknown as Window
+    const fetchRuntime = vi.fn()
+    const bridge = createPreviewRuntimeBridge({ projectId, publicKey: "public-key", apiBaseUrl: "", getPreviewWindow: () => previewWindow, fetchRuntime })
+
+    await bridge(message(previewWindow, { type: previewRuntimeRequestType, id: "get-body", projectId, path: "/collections/tasks", method: "GET", body: {} }))
+    await bridge(message(previewWindow, { type: previewRuntimeRequestType, id: "array-body", projectId, path: "/collections/tasks", method: "POST", body: [] }))
+    await bridge(message(previewWindow, { type: previewRuntimeRequestType, id: "large-body", projectId, path: "/collections/tasks", method: "POST", body: { text: "x".repeat(64 * 1024) } }))
+
+    expect(fetchRuntime).not.toHaveBeenCalled()
+    expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({ id: "get-body", status: 400 }), origin)
+    expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({ id: "array-body", status: 400 }), origin)
+    expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({ id: "large-body", status: 413 }), origin)
+  })
+
+  it("limits concurrent Runtime requests", async () => {
+    const postMessage = vi.fn()
+    const previewWindow = { postMessage } as unknown as Window
+    let release!: () => void
+    const pending = new Promise<Response>((resolve) => { release = () => resolve(new Response(JSON.stringify({ data: [] }), { status: 200 })) })
+    const fetchRuntime = vi.fn(() => pending)
+    const bridge = createPreviewRuntimeBridge({ projectId, publicKey: "public-key", apiBaseUrl: "", getPreviewWindow: () => previewWindow, fetchRuntime, maxConcurrent: 1 })
+
+    const first = bridge(message(previewWindow, { type: previewRuntimeRequestType, id: "first", projectId, path: "/collections/tasks", method: "GET" }))
+    await bridge(message(previewWindow, { type: previewRuntimeRequestType, id: "second", projectId, path: "/collections/tasks", method: "GET" }))
+    expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({ id: "second", status: 429 }), origin)
+    expect(fetchRuntime).toHaveBeenCalledTimes(1)
+
+    release()
+    await first
+  })
 })
