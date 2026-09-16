@@ -1,4 +1,5 @@
 import type { ProjectDocumentPayload } from "./platform-client"
+import { cloneJson } from "../utils/clone-json"
 
 export type ConflictSummary = {
   titleChanged: boolean
@@ -33,16 +34,16 @@ export function cloneAsConflictCopy(payload: ProjectDocumentPayload): ProjectDoc
   const versionIDs = new Map(payload.versions.map((version) => [version.id, crypto.randomUUID()]))
   return {
     project: {
-      ...structuredClone(payload.project),
+      ...cloneJson(payload.project),
       id: projectId,
       title: `${payload.project.title}（冲突副本）`,
       activeVersionId: payload.project.activeVersionId ? versionIDs.get(payload.project.activeVersionId) : undefined,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     },
-    messages: payload.messages.map((message) => ({ ...structuredClone(message), id: crypto.randomUUID(), projectId })),
+    messages: payload.messages.map((message) => ({ ...cloneJson(message), id: crypto.randomUUID(), projectId })),
     versions: payload.versions.map((version) => ({
-      ...structuredClone(version),
+      ...cloneJson(version),
       id: versionIDs.get(version.id)!,
       projectId,
       parentVersionId: version.parentVersionId ? versionIDs.get(version.parentVersionId) : undefined,

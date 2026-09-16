@@ -1,5 +1,6 @@
 import "fake-indexeddb/auto"
 import { afterEach, describe, expect, it } from "vitest"
+import { reactive } from "vue"
 import { createProject, transitionProject } from "../domain/project"
 import type { ProjectSnapshot } from "../types/agent"
 import { createVersion } from "../versions/version-service"
@@ -29,6 +30,17 @@ const snapshot: ProjectSnapshot = {
 }
 
 describe("ProjectRepository", () => {
+  it("detaches Vue proxies before writing to IndexedDB", async () => {
+    const { repository } = setup()
+    const project = reactive(createProject("响应式项目"))
+
+    await expect(repository.createWithMessage(project, "代理对象需求")).resolves.toBeUndefined()
+    project.title = "页面中的新标题"
+
+    const restored = await repository.restore(project.id)
+    expect(restored?.project.title).toBe("响应式项目")
+  })
+
   it("creates a project and its first message atomically", async () => {
     const { repository } = setup()
     const project = createProject("任务看板")

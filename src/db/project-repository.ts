@@ -8,6 +8,7 @@ import type {
 } from "../types/agent"
 import { db, type ReplicaDatabase, type StoredMessage } from "./database"
 import type { ProjectDocument, ProjectDocumentPayload } from "../services/platform-client"
+import { cloneJson } from "../utils/clone-json"
 
 export type ProjectSyncConflict = {
   projectId: string
@@ -34,7 +35,7 @@ export class ProjectRepository {
       this.database.projects,
       this.database.messages,
       async () => {
-        await this.database.projects.add(structuredClone(project))
+        await this.database.projects.add(cloneJson(project))
         await this.database.messages.add({
           id: crypto.randomUUID(),
           projectId: project.id,
@@ -47,7 +48,7 @@ export class ProjectRepository {
   }
 
   async saveProject(project: Project): Promise<void> {
-    await this.database.projects.put(structuredClone(project))
+    await this.database.projects.put(cloneJson(project))
   }
 
   async addUserMessage(projectId: string, content: string): Promise<void> {
@@ -117,7 +118,7 @@ export class ProjectRepository {
   ): Promise<AgentRunRecovery> {
     const existing = await this.database.agentRuns.get(input.projectId)
     const now = new Date().toISOString()
-    const recovery = structuredClone({
+    const recovery = cloneJson({
       ...input,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
@@ -139,8 +140,8 @@ export class ProjectRepository {
       async () => {
         const exists = await this.database.projects.get(project.id)
         if (!exists) throw new Error(`Project not found: ${project.id}`)
-        await this.database.versions.add(structuredClone(version))
-        await this.database.projects.put(structuredClone(project))
+        await this.database.versions.add(cloneJson(version))
+        await this.database.projects.put(cloneJson(project))
         await this.database.agentRuns.delete(project.id)
       },
     )
@@ -177,15 +178,15 @@ export class ProjectRepository {
     if (!restored) return undefined
     const { cloudRevision: _revision, cloudContentHash: _hash, ...project } = restored.project
     return {
-      project: structuredClone(project),
-      messages: structuredClone(restored.messages),
-      versions: structuredClone(restored.versions),
+      project: cloneJson(project),
+      messages: cloneJson(restored.messages),
+      versions: cloneJson(restored.versions),
     }
   }
 
   async importDocument(payload: ProjectDocumentPayload, revision?: number, contentHash?: string): Promise<void> {
     const project: Project = {
-      ...structuredClone(payload.project),
+      ...cloneJson(payload.project),
       ...(revision === undefined ? {} : { cloudRevision: revision }),
       ...(contentHash === undefined ? {} : { cloudContentHash: contentHash }),
     }
@@ -194,8 +195,8 @@ export class ProjectRepository {
       await this.database.versions.where("projectId").equals(project.id).delete()
       await this.database.agentRuns.delete(project.id)
       await this.database.projects.put(project)
-      if (payload.messages.length) await this.database.messages.bulkPut(structuredClone(payload.messages))
-      if (payload.versions.length) await this.database.versions.bulkPut(structuredClone(payload.versions))
+      if (payload.messages.length) await this.database.messages.bulkPut(cloneJson(payload.messages))
+      if (payload.versions.length) await this.database.versions.bulkPut(cloneJson(payload.versions))
     })
   }
 
@@ -209,7 +210,7 @@ export class ProjectRepository {
   }
 
   async saveConflict(conflict: ProjectSyncConflict): Promise<void> {
-    await this.database.syncConflicts.put(structuredClone(conflict))
+    await this.database.syncConflicts.put(cloneJson(conflict))
   }
 
   async getConflict(projectId: string): Promise<ProjectSyncConflict | undefined> {

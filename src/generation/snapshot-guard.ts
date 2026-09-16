@@ -1,4 +1,5 @@
 import type { ProjectSnapshot } from "../types/agent"
+import { cloneJson } from "../utils/clone-json"
 
 export const snapshotLimits = {
   files: 80,
@@ -62,7 +63,7 @@ export function guardSnapshot(input: ProjectSnapshot): ProjectSnapshot {
     pinnedDependencies[name] = dependencies[name]
   }
 
-  return structuredClone({
+  return cloneJson({
     ...input,
     dependencies: pinnedDependencies,
   })

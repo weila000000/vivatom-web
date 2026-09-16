@@ -22,6 +22,7 @@ import type {
   Version,
 } from "../types/agent"
 import { createVersion } from "../versions/version-service"
+import { cloneJson } from "../utils/clone-json"
 
 export function useAgentRun(token: () => string, workspaceId: () => string, onUsageChanged?: () => void) {
   const project = ref<Project>()
@@ -317,8 +318,8 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
     if (!project.value || project.value.status !== "error" || !recovery.value) {
       return
     }
-    const request = structuredClone(recovery.value.request)
-	repairAttempts.value = recovery.value.repairAttempts ?? 0
+    const request = cloneJson(recovery.value.request)
+    repairAttempts.value = recovery.value.repairAttempts ?? 0
     if (request.action === "plan") {
       await transition("retry_plan")
     } else {

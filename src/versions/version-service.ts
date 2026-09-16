@@ -1,5 +1,6 @@
 import { guardSnapshot } from "../generation/snapshot-guard"
 import type { ProjectSnapshot, Version } from "../types/agent"
+import { cloneJson } from "../utils/clone-json"
 
 export interface CreateVersionInput {
   projectId: string
@@ -17,7 +18,7 @@ export function createVersion(input: CreateVersionInput): Version {
     projectId: input.projectId,
     ...(input.parentVersionId ? { parentVersionId: input.parentVersionId } : {}),
     prompt: input.prompt,
-    snapshot: structuredClone(guardSnapshot(input.snapshot)),
+    snapshot: cloneJson(guardSnapshot(input.snapshot)),
     ...(input.candidateId ? { candidateId: input.candidateId } : {}),
     ...(input.snapshotHash ? { snapshotHash: input.snapshotHash } : {}),
     sourceAction: input.sourceAction ?? "local",
