@@ -1,5 +1,13 @@
 import type { BuildPlan } from "../types/agent"
 
+export interface ProjectRuntime {
+  publicKey: string
+  adminToken: string
+  schemaVersion: number
+}
+
+export type RuntimeCredentials = Pick<ProjectRuntime, "publicKey" | "adminToken">
+
 export type ProjectStatus =
   | "draft"
   | "planning"
@@ -29,6 +37,7 @@ export interface Project {
   activeVersionId?: string
   cloudRevision?: number
   cloudContentHash?: string
+  runtime?: ProjectRuntime
   createdAt: string
   updatedAt: string
 }
