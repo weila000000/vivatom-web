@@ -113,6 +113,9 @@ a { color: inherit; }
 .tenant-main { min-width: 0; }
 .tenant-topbar { height: 54px; padding: 0 20px; border-bottom: 1px solid #30302f; display: flex; align-items: center; gap: 8px; }
 .tenant-topbar > span { margin-right: auto; color: #8f8f8b; font-size: 12px; }
+.tenant-startup-state { min-height: calc(100vh - 54px); padding: 32px; display: grid; place-content: center; gap: 12px; color: #aaa9a4; text-align: center; }
+.tenant-startup-state p { margin: 0; }
+.tenant-startup-state button { justify-self: center; min-height: 36px; padding: 0 14px; border: 1px solid #4b4b48; border-radius: 5px; background: #343432; color: #f4f3ef; cursor: pointer; }
 .credit { height: 32px; padding: 0 12px; border: 1px solid #41413f; border-radius: 999px; color: #ddd; background: transparent; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
 .tenant-mobile-menu { display: none; position: fixed; top: 9px; left: 10px; z-index: 12; color: white; }
 .sidebar-scrim { display: none; }

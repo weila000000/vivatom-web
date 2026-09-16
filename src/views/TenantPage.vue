@@ -4,7 +4,8 @@ import { computed, onMounted, ref, watch } from "vue"
 import { useRouter } from "vue-router"
 import StudioWorkspace from "../components/StudioWorkspace.vue"
 import WorkspaceMembers from "../components/WorkspaceMembers.vue"
-import { fetchPlatformIdentity, fetchWorkspaceUsage, listWorkspaceProjects, logoutPlatformAccount, type CatalogProject, type WorkspaceUsage } from "../services/platform-client"
+import { fetchPlatformIdentity, fetchWorkspaceUsage, listWorkspaceProjects, logoutPlatformAccount, PlatformError, type CatalogProject, type WorkspaceUsage } from "../services/platform-client"
+import { checkServer } from "../services/health"
 import { clearTenantSession, readTenantSession, selectTenantWorkspace, updateTenantIdentity } from "../services/tenant-session"
 
 const router = useRouter()
@@ -15,21 +16,44 @@ const catalogProjects = ref<CatalogProject[]>([])
 const selectedProjectId = ref<string>()
 const usage = ref<WorkspaceUsage>()
 const view = ref<"studio" | "members">("studio")
+const initialized = ref(false)
+const initializing = ref(false)
+const startupError = ref("")
 const initials = computed(() => session.value?.user.name.slice(0, 1).toUpperCase() ?? "V")
 const activeWorkspace = computed(() => session.value?.workspaces.find((item) => item.id === session.value?.activeWorkspaceId) ?? session.value?.workspaces[0])
 
-onMounted(async () => {
+onMounted(() => { void initialize() })
+
+async function initialize() {
   if (!session.value) return void router.replace("/login")
+  initializing.value = true
+  startupError.value = ""
   try {
+    let ready = false
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      if (await checkServer() === "ready") {
+        ready = true
+        break
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 500))
+    }
+    if (!ready) throw new Error("service unavailable")
     const identity = await fetchPlatformIdentity(session.value.token)
     session.value = updateTenantIdentity(identity.user, identity.workspaces)
     await refreshCatalog()
 	await refreshUsage()
-  } catch {
-    clearTenantSession()
-    await router.replace("/login")
+    initialized.value = true
+  } catch (cause) {
+    if (cause instanceof PlatformError && cause.status === 401) {
+      clearTenantSession()
+      await router.replace("/login")
+      return
+    }
+    startupError.value = "服务仍在启动，请稍后重试。"
+  } finally {
+    initializing.value = false
   }
-})
+}
 
 function chooseWorkspace(id: string) {
   session.value = selectTenantWorkspace(id)
@@ -102,6 +126,6 @@ async function logout() {
       <div class="account-menu"><div class="account-row"><span class="avatar">{{ initials }}</span><div><strong>{{ session?.user.name }}</strong><small>{{ session?.user.email }}</small></div></div><button @click="view = 'members'"><Settings :size="17" />工作区设置</button><button><UserRound :size="17" />个人主页</button><button><CircleHelp :size="17" />帮助中心</button><RouterLink to="/"><ExternalLink :size="17" />官网首页</RouterLink><button class="danger" @click="logout"><LogOut :size="17" />退出登录</button></div>
     </aside>
     <button v-if="mobileOpen" class="sidebar-scrim" aria-label="关闭侧栏" @click="mobileOpen = false"><X /></button>
-    <section class="tenant-main"><div class="tenant-topbar"><span>{{ activeWorkspace?.name }} / {{ view === 'studio' ? '首页' : '成员' }}</span><span class="credit" :title="usage ? `已使用 ${usage.used} / ${usage.limit}` : '额度暂不可用'"><Sparkles :size="15" />{{ usage?.remaining ?? '—' }}</span><button class="icon-button" aria-label="通知"><Bell :size="18" /></button></div><StudioWorkspace v-if="view === 'studio' && session && activeWorkspace" :token="session.token" :workspace-id="activeWorkspace.id" :selected-project-id="selectedProjectId" @catalog-changed="catalogChanged" @usage-changed="refreshUsage" /><WorkspaceMembers v-else-if="session && activeWorkspace" :token="session.token" :account-id="session.user.id" :workspace-id="activeWorkspace.id" :workspace-name="activeWorkspace.name" :workspace-role="activeWorkspace.role" @identity-changed="refreshIdentity" /></section>
+    <section class="tenant-main"><div class="tenant-topbar"><span>{{ activeWorkspace?.name }} / {{ view === 'studio' ? '首页' : '成员' }}</span><span class="credit" :title="usage ? `已使用 ${usage.used} / ${usage.limit}` : '额度暂不可用'"><Sparkles :size="15" />{{ usage?.remaining ?? '—' }}</span><button class="icon-button" aria-label="通知"><Bell :size="18" /></button></div><div v-if="initializing" class="tenant-startup-state">正在连接服务...</div><div v-else-if="startupError" class="tenant-startup-state"><p>{{ startupError }}</p><button type="button" @click="initialize">重新连接</button></div><StudioWorkspace v-else-if="initialized && view === 'studio' && session && activeWorkspace" :token="session.token" :workspace-id="activeWorkspace.id" :selected-project-id="selectedProjectId" @catalog-changed="catalogChanged" @usage-changed="refreshUsage" /><WorkspaceMembers v-else-if="initialized && session && activeWorkspace" :token="session.token" :account-id="session.user.id" :workspace-id="activeWorkspace.id" :workspace-name="activeWorkspace.name" :workspace-role="activeWorkspace.role" @identity-changed="refreshIdentity" /></section>
   </div>
 </template>
