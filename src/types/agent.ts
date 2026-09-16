@@ -90,6 +90,7 @@ export interface Version {
   build?: {
     toolchain: string
     durationMs: number
+    artifactId?: string
     verifiedAt?: string
   }
 }

@@ -1,0 +1,15 @@
+import { describe, expect, it } from "vitest"
+import type { Version } from "../types/agent"
+import { versionPreviewUrl } from "./preview-url"
+
+describe("version preview URL", () => {
+  it("builds an isolated artifact URL", () => {
+    const version = { build: { toolchain: "vite", durationMs: 10, artifactId: "a".repeat(64) } } as Version
+    expect(versionPreviewUrl(version, "https://preview.example.com/apps/"))
+      .toBe(`https://preview.example.com/apps/${"a".repeat(64)}/`)
+  })
+
+  it("does not expose versions without a valid artifact", () => {
+    expect(versionPreviewUrl({ build: { toolchain: "vite", durationMs: 10 } } as Version)).toBeUndefined()
+  })
+})
