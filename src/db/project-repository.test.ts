@@ -23,10 +23,9 @@ const snapshot: ProjectSnapshot = {
   source: "template",
   title: "Task",
   summary: "Board",
-  entryFile: "/src/main.ts",
-  files: { "/src/main.ts": "const title = 'Task'" },
-  dependencies: { vue: "3.5.42" },
-  backend: { enabled: false, auth: "none", collections: [] },
+  entryFile: "/src/App.tsx",
+  files: { "/src/App.tsx": "export default function App() { return <main>Task</main> }" },
+  dependencies: { react: "18.3.1", "react-dom": "18.3.1" },
 }
 
 describe("ProjectRepository", () => {
@@ -104,7 +103,6 @@ describe("ProjectRepository", () => {
         filePlan: [],
         designDirection: "清晰",
         acceptanceChecks: [],
-        backend: snapshot.backend,
       },
     })
     const requestRecovery = await database.agentRuns.get(project.id)

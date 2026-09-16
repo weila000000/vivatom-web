@@ -1,4 +1,5 @@
-export type AgentAction = "plan" | "build" | "iterate" | "repair" | "polish"
+export type AgentAction = "plan" | "build" | "iterate" | "repair" | "race" | "polish"
+export type WorkMode = "engineer" | "team" | "race"
 
 export interface BackendSpec {
   enabled: boolean
@@ -23,7 +24,7 @@ export interface BuildPlan {
     coreFlows: string[]
     constraints: string[]
   }
-  productType: "website" | "web_app"
+  productType?: "website" | "web_app"
   productSummary: string
   targetUsers: string[]
   features: string[]
@@ -31,21 +32,22 @@ export interface BuildPlan {
   filePlan: Array<{ path: string; responsibility: string }>
   designDirection: string
   acceptanceChecks: string[]
-  backend: BackendSpec
+  backend?: BackendSpec
 }
 
 export interface ProjectSnapshot {
-  source: "provider" | "template"
+  source: "vibe" | "template"
   title: string
   summary: string
   files: Record<string, string>
   dependencies: Record<string, string>
   entryFile: string
-  backend: BackendSpec
+  backend?: BackendSpec
 }
 
 export interface AgentRequest {
   action: AgentAction
+  mode?: WorkMode
   projectId: string
   approvalId?: string
   prompt?: string
@@ -70,6 +72,13 @@ export interface AgentEvent {
   snapshotHash?: string
   plan?: BuildPlan
   snapshot?: ProjectSnapshot
+  candidates?: RaceCandidate[]
+}
+
+export interface RaceCandidate {
+  id: string
+  direction: string
+  snapshot: ProjectSnapshot
 }
 
 export interface Version {
@@ -105,6 +114,7 @@ interface RecoveryBase {
 
 export type AgentRunRecovery =
   | (RecoveryBase & { phase: "request" })
+  | (RecoveryBase & { phase: "race"; candidates: RaceCandidate[] })
   | (RecoveryBase & {
       phase: "snapshot"
       snapshot: ProjectSnapshot

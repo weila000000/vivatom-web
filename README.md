@@ -11,10 +11,11 @@ pnpm dev
 
 默认地址为 `http://localhost:5173`，`/api` 会代理到 `http://localhost:8080`。
 
+也可以执行 `./scripts/dev.sh`。GoLand 或 IntelliJ IDEA 单独打开前端项目后，选择共享运行项 `Vivatom Frontend`；macOS 使用 `Control + R`，Windows/Linux 使用 `Shift + F10`。后端在另一个 IDE 窗口打开 `../vivatom-api-svc`，运行 `Vivatom Backend`。
+
 ## Verification
 
 ```bash
 pnpm test -- --run
 pnpm build
 ```
-

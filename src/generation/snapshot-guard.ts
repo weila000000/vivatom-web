@@ -2,16 +2,20 @@ import type { ProjectSnapshot } from "../types/agent"
 import { cloneJson } from "../utils/clone-json"
 
 export const snapshotLimits = {
-  files: 80,
-  fileBytes: 256 * 1024,
-  totalBytes: 2 * 1024 * 1024,
+  files: 16,
+	fileBytes: 120 * 1024,
+	totalBytes: 120 * 1024,
 } as const
 
 const dependencies: Record<string, string> = {
-  vue: "3.5.42",
+  react: "18.3.1",
+  "react-dom": "18.3.1",
+  "lucide-react": "0.468.0",
+  recharts: "2.13.3",
+  "date-fns": "4.1.0",
 }
 
-const allowedExtensions = new Set(["css", "js", "jsx", "json", "ts", "tsx", "vue"])
+const allowedExtensions = new Set(["css", "js", "jsx", "json", "ts", "tsx"])
 const forbiddenSource = [
   ["source.eval", /\beval\s*\(/],
   ["source.function_constructor", /\bFunction\s*\(/],
@@ -35,10 +39,11 @@ export class SnapshotRejectedError extends Error {
 }
 
 export function guardSnapshot(input: ProjectSnapshot): ProjectSnapshot {
+  if (input.source !== "vibe" && input.source !== "template") reject("source.invalid")
   const entries = Object.entries(input.files)
   if (entries.length === 0) reject("files.empty")
   if (entries.length > snapshotLimits.files) reject("files.too_many")
-  if (!isSafeSourcePath(input.entryFile)) reject("entry.invalid", input.entryFile)
+  if (input.entryFile !== "/src/App.tsx" || !isSafeSourcePath(input.entryFile)) reject("entry.invalid", input.entryFile)
   if (!Object.hasOwn(input.files, input.entryFile)) reject("entry.missing", input.entryFile)
 
   let totalBytes = 0
@@ -58,6 +63,9 @@ export function guardSnapshot(input: ProjectSnapshot): ProjectSnapshot {
   }
 
   const pinnedDependencies: Record<string, string> = {}
+	for (const required of ["react", "react-dom"]) {
+		if (!Object.hasOwn(input.dependencies, required)) reject("dependency.missing", required)
+	}
   for (const name of Object.keys(input.dependencies)) {
     if (!Object.hasOwn(dependencies, name)) reject("dependency.denied", name)
     pinnedDependencies[name] = dependencies[name]

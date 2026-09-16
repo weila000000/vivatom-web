@@ -12,7 +12,7 @@ import {
   SnapshotRejectedError,
 } from "../generation/snapshot-guard"
 import { AgentTransportError, runAgent } from "../services/agent-client"
-import { approveWorkspacePlan, commitBuildCandidate, fetchPendingBuildCandidate, PlatformError, restageWorkspaceVersion } from "../services/platform-client"
+import { commitBuildCandidate, fetchPendingBuildCandidate, PlatformError, restageWorkspaceVersion } from "../services/platform-client"
 import { createRuntimeProvisionAttempt, RuntimeProvisionError } from "../services/runtime-client"
 import type {
   AgentEvent,
@@ -20,6 +20,7 @@ import type {
   AgentRunRecovery,
   BuildPlan,
   ProjectSnapshot,
+  RaceCandidate,
   Version,
 } from "../types/agent"
 import { createVersion } from "../versions/version-service"
@@ -31,6 +32,7 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
   const events = ref<AgentEvent[]>([])
   const plan = ref<BuildPlan>()
   const candidateSnapshot = ref<ProjectSnapshot>()
+  const raceCandidates = ref<RaceCandidate[]>([])
   const activeVersion = ref<Version>()
   const versions = ref<Version[]>([])
   const running = ref(false)
@@ -68,38 +70,48 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
         events.value.push(event)
         await projectRepository.addAgentEvent(request.projectId, event)
         if (event.type === "approval.required" && event.plan) {
-          if (!event.approvalId) {
-            error.value = "方案审批凭证缺失，请重新生成方案。"
+				plan.value = event.plan
+				await transition("plan_ready", { plan: event.plan })
+				await projectRepository.clearRecovery(request.projectId)
+				recovery.value = undefined
+        }
+        if (event.type === "snapshot.completed" && event.candidates?.length) {
+          try {
+            raceCandidates.value = event.candidates.map((candidate) => ({
+              ...candidate,
+              snapshot: guardSnapshot(candidate.snapshot),
+            }))
+            recovery.value = await projectRepository.saveRaceRecovery(request.projectId, request, raceCandidates.value)
+          } catch {
+            error.value = "竞速候选源码未通过安全检查。"
             await failActiveProject()
-          } else {
-            plan.value = event.plan
-            await transition("plan_ready", { plan: event.plan, approvalId: event.approvalId })
-            await projectRepository.clearRecovery(request.projectId)
-            recovery.value = undefined
           }
         }
         if (event.type === "snapshot.completed" && event.snapshot) {
           try {
-            if (!event.candidateId || !event.snapshotHash) {
-              throw new Error("candidate receipt missing")
-            }
             candidateSnapshot.value = guardSnapshot(event.snapshot)
+            const receipt = event.candidateId && event.snapshotHash
+              ? { candidateId: event.candidateId, snapshotHash: event.snapshotHash }
+              : undefined
             recovery.value = await projectRepository.saveSnapshotRecovery(
               request.projectId,
               request,
               candidateSnapshot.value,
               attempts,
-              { candidateId: event.candidateId, snapshotHash: event.snapshotHash },
+              receipt,
             )
             await commitCandidate(
               candidateSnapshot.value,
               request.prompt ?? request.error ?? projectPrompt.value,
+              request.action,
             )
           } catch (cause) {
             error.value =
               cause instanceof SnapshotRejectedError
-                ? "候选源码未通过浏览器安全检查。"
-                : "候选源码无法验证。"
+                ? `候选源码未通过浏览器安全检查：${cause.message}`
+                : cause instanceof Error
+                  ? `候选源码无法验证：${cause.message}`
+                  : "候选源码无法验证。"
             events.value.push({
               type: "error",
               code: "snapshot_rejected",
@@ -131,10 +143,10 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
     }
   }
 
-  async function startPlan(prompt: string, workspaceId?: string) {
+	async function startPlan(prompt: string, workspaceId?: string, mode: import("../types/agent").WorkMode = "team") {
 	repairAttempts.value = 0
     if (!project.value) {
-      project.value = createProject(prompt, workspaceId)
+		project.value = createProject(prompt, workspaceId, mode)
       await projectRepository.createWithMessage(project.value, prompt)
       await transition("start_plan")
     } else if (project.value.status === "draft") {
@@ -155,25 +167,37 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
       await projectRepository.saveProject(project.value)
     }
     candidateSnapshot.value = undefined
+    raceCandidates.value = []
     projectPrompt.value = prompt
-    await execute({ action: "plan", projectId: project.value.id, prompt })
+	await execute({ action: "plan", mode: project.value.mode ?? "team", projectId: project.value.id, prompt })
   }
 
   async function approveAndBuild(prompt: string) {
-    if (!project.value || !plan.value || !project.value.approvalId) {
+	if (!project.value || !plan.value) {
       throw new Error("没有可批准的方案")
     }
-    await approveWorkspacePlan(workspaceId(), project.value.id, project.value.approvalId, token())
-    await transition("approve")
+	await transition("approve")
     candidateSnapshot.value = undefined
+	raceCandidates.value = []
 	repairAttempts.value = 0
     const buildPrompt = prompt.trim() || projectPrompt.value
-    await execute({
-      action: "build",
-      projectId: project.value.id,
-      approvalId: project.value.approvalId,
-      prompt: buildPrompt,
+	const { backend: _legacyBackend, productType: _legacyProductType, ...approvedPlan } = plan.value
+	await execute({
+		action: project.value.mode === "race" ? "race" : "build",
+		mode: project.value.mode ?? "team",
+		projectId: project.value.id,
+		prompt: buildPrompt,
+		plan: approvedPlan,
     })
+  }
+
+  async function selectRaceCandidate(candidateId: string) {
+    if (!project.value || project.value.status !== "building") return
+    const candidate = raceCandidates.value.find((item) => item.id === candidateId)
+    if (!candidate) throw new Error("找不到竞速候选")
+    candidateSnapshot.value = candidate.snapshot
+    await commitCandidate(candidate.snapshot, projectPrompt.value, "race")
+    raceCandidates.value = []
   }
 
   async function revise(action: "iterate" | "repair" | "polish", instruction: string) {
@@ -209,7 +233,7 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
     await commitCandidate(candidateSnapshot.value, instruction)
   }
 
-  async function commitCandidate(snapshot: ProjectSnapshot, prompt: string) {
+  async function commitCandidate(snapshot: ProjectSnapshot, prompt: string, sourceAction: Version["sourceAction"] = "local") {
     if (
       !project.value ||
       project.value.status !== "building" ||
@@ -256,10 +280,11 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
             parentVersionId: activeVersion.value?.id,
             prompt: versionPrompt,
             snapshot,
+			sourceAction,
           })
       }
       let runtime = project.value.runtime
-      if (snapshot.backend.enabled) {
+		if (snapshot.backend?.enabled) {
         const attempt = createRuntimeProvisionAttempt({
           projectId: project.value.id,
           title: snapshot.title,
@@ -400,6 +425,7 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
       versions.value = restored.versions
       activeVersion.value = restored.activeVersion
       candidateSnapshot.value = restored.activeVersion?.snapshot
+      raceCandidates.value = restored.recovery?.phase === "race" ? restored.recovery.candidates : []
       recovery.value = restored.recovery
 	  repairAttempts.value = restored.recovery?.repairAttempts ?? 0
       projectPrompt.value =
@@ -413,7 +439,14 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
           status: message.status as AgentEvent["status"],
           message: message.content,
         }))
-      if (restored.recovery?.phase === "snapshot") {
+      if (restored.recovery?.phase === "race") {
+        if (project.value.status !== "building") {
+          const resumed = { ...project.value, status: "building" as const, updatedAt: new Date().toISOString() }
+          await projectRepository.saveProject(resumed)
+          project.value = resumed
+        }
+        error.value = ""
+      } else if (restored.recovery?.phase === "snapshot") {
         if (project.value.status === "error") {
           await transition("retry_build")
         } else if (project.value.status !== "building") {
@@ -496,6 +529,7 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
     events.value = []
     plan.value = undefined
     candidateSnapshot.value = undefined
+    raceCandidates.value = []
     activeVersion.value = undefined
     versions.value = []
     error.value = ""
@@ -510,6 +544,7 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
     events,
     plan,
     candidateSnapshot,
+    raceCandidates,
     activeVersion,
     versions,
     running,
@@ -520,6 +555,7 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
 	repairAttempts,
     startPlan,
     approveAndBuild,
+	selectRaceCandidate,
 	revise,
     restoreVersion,
     cancel,

@@ -77,13 +77,13 @@ export async function* parseSSE(stream: ReadableStream<Uint8Array>): AsyncGenera
 
 export async function* runAgent(
   request: AgentRequest,
-  workspaceId: string,
-  token: string,
+  _workspaceId: string,
+  _token: string,
   signal?: AbortSignal,
 ): AsyncGenerator<AgentEvent> {
-  const response = await fetch(`/api/platform/workspaces/${encodeURIComponent(workspaceId)}/agent`, {
+	const response = await fetch("/api/agent", {
     method: "POST",
-    headers: { "content-type": "application/json", Authorization: `Bearer ${token}` },
+	headers: { "content-type": "application/json" },
     body: JSON.stringify(request),
     signal,
   })

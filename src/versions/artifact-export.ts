@@ -14,10 +14,10 @@ export function buildVersionArchive(version: Version): Uint8Array {
     type: "module",
     scripts: { dev: "vite", build: "vite build", preview: "vite preview" },
     dependencies,
-    devDependencies: { "@vitejs/plugin-vue": "^6.0.1", vite: "^7.1.5", typescript: "^5.9.3" },
+	devDependencies: { "@vitejs/plugin-react": "latest", vite: "^7.1.5", typescript: "^5.9.3" },
   }, null, 2) + "\n")
-  files["index.html"] = strToU8('<!doctype html>\n<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Vivatom App</title></head><body><div id="app"></div><script type="module" src="/src/main.ts"></script></body></html>\n')
-  files["vite.config.ts"] = strToU8('import { defineConfig } from "vite"\nimport vue from "@vitejs/plugin-vue"\n\nexport default defineConfig({ plugins: [vue()] })\n')
+  files["index.html"] = strToU8('<!doctype html>\n<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Vivatom App</title></head><body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body></html>\n')
+  files["vite.config.ts"] = strToU8('import { defineConfig } from "vite"\nimport react from "@vitejs/plugin-react"\n\nexport default defineConfig({ plugins: [react()] })\n')
   files["VIVATOM_VERSION.json"] = strToU8(JSON.stringify({ id: version.id, parentVersionId: version.parentVersionId, prompt: version.prompt, createdAt: version.createdAt }, null, 2) + "\n")
   return zipSync(files, { level: 6 })
 }

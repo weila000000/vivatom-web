@@ -11,13 +11,12 @@ function validSnapshot(): ProjectSnapshot {
     source: "template",
     title: "Task",
     summary: "Board",
-    entryFile: "/src/main.ts",
+    entryFile: "/src/App.tsx",
     files: {
-      "/src/main.ts": 'import App from "./App.vue"',
-      "/src/App.vue": "<template><main>Task</main></template>",
+      "/src/main.tsx": 'import App from "./App"',
+      "/src/App.tsx": "export default function App() { return <main>Task</main> }",
     },
-    dependencies: { vue: "latest" },
-    backend: { enabled: false, auth: "none", collections: [] },
+    dependencies: { react: "latest", "react-dom": "latest" },
   }
 }
 
@@ -25,8 +24,8 @@ describe("guardSnapshot", () => {
   it("accepts safe files and pins dependencies", () => {
     const input = validSnapshot()
     const guarded = guardSnapshot(input)
-    expect(guarded.dependencies).toEqual({ vue: "3.5.42" })
-    expect(input.dependencies).toEqual({ vue: "latest" })
+    expect(guarded.dependencies).toEqual({ react: "18.3.1", "react-dom": "18.3.1" })
+    expect(input.dependencies).toEqual({ react: "latest", "react-dom": "latest" })
   })
 
   it.each([
@@ -37,13 +36,13 @@ describe("guardSnapshot", () => {
       delete value.files[value.entryFile]
     }],
     ["network access", (value: ProjectSnapshot) => {
-      value.files["/src/main.ts"] = 'fetch("/secret")'
+      value.files["/src/App.tsx"] = 'fetch("/secret")'
     }],
     ["unknown dependency", (value: ProjectSnapshot) => {
       value.dependencies.axios = "latest"
     }],
     ["oversized file", (value: ProjectSnapshot) => {
-      value.files["/src/main.ts"] = "x".repeat(snapshotLimits.fileBytes + 1)
+      value.files["/src/App.tsx"] = "x".repeat(snapshotLimits.fileBytes + 1)
     }],
   ])("rejects %s", (_name, mutate) => {
     const input = validSnapshot()

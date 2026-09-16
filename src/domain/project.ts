@@ -1,4 +1,4 @@
-import type { BuildPlan } from "../types/agent"
+import type { BuildPlan, WorkMode } from "../types/agent"
 
 export interface ProjectRuntime {
   publicKey: string
@@ -31,6 +31,7 @@ export interface Project {
   id: string
   workspaceId?: string
   title: string
+  mode?: WorkMode
   status: ProjectStatus
   plan?: BuildPlan
   approvalId?: string
@@ -55,12 +56,13 @@ const transitions: Record<ProjectStatus, Partial<Record<ProjectCommand, ProjectS
   error: { retry_plan: "planning", retry_build: "building" },
 }
 
-export function createProject(title: string, workspaceId?: string): Project {
+export function createProject(title: string, workspaceId?: string, mode: WorkMode = "team"): Project {
   const now = new Date().toISOString()
   return {
     id: crypto.randomUUID(),
     workspaceId,
     title: title.trim() || "未命名项目",
+    mode,
     status: "draft",
     createdAt: now,
     updatedAt: now,

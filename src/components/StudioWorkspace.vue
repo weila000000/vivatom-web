@@ -9,6 +9,7 @@ import { projectRepository, type ProjectSyncConflict } from "../db/project-repos
 import { guardSnapshot } from "../generation/snapshot-guard"
 import { cloneAsConflictCopy, summarizeConflict } from "../services/project-conflict"
 import type { Version } from "../types/agent"
+import type { WorkMode } from "../types/agent"
 import { archiveFilename, buildVersionArchive } from "../versions/artifact-export"
 import { hostedVersionPreviewUrl } from "../versions/preview-url"
 
@@ -16,6 +17,7 @@ const props = defineProps<{ token: string; workspaceId: string; selectedProjectI
 const emit = defineEmits<{ catalogChanged: [projectId: string]; usageChanged: [] }>()
 
 const prompt = ref("")
+const mode = ref<WorkMode>("team")
 const health = ref<HealthState>("checking")
 const controller = new AbortController()
 const {
@@ -23,6 +25,7 @@ const {
   events,
   plan,
   candidateSnapshot,
+  raceCandidates,
   activeVersion,
   versions,
   running,
@@ -33,6 +36,7 @@ const {
   repairAttempts,
   startPlan,
   approveAndBuild,
+	selectRaceCandidate,
 	revise,
   restoreVersion,
   cancel,
@@ -81,10 +85,9 @@ const canStartPlan = computed(
 
 const agentNames: Record<string, string> = {
   mike: "产品分析",
-  ava: "方案架构",
-  bob: "前端工程",
-  lin: "数据工程",
-  sam: "质量审查",
+	emma: "产品规划",
+	bob: "技术规划",
+	alex: "应用工程",
   compiler: "构建验证",
 }
 
@@ -98,6 +101,7 @@ function provenanceLabel(version: Version) {
     build: "审批构建",
     iterate: "功能迭代",
     repair: "问题修复",
+	 race: "方案竞速",
     polish: "体验打磨",
     restore: "历史恢复",
     local: "本地版本",
@@ -285,7 +289,7 @@ async function createProject() {
     }
     const requirement = prompt.value.trim()
     if (!requirement) return
-    await startPlan(requirement, props.workspaceId)
+	await startPlan(requirement, props.workspaceId, mode.value)
   } catch (cause) {
     catalogError.value = cause instanceof Error ? cause.message : "无法开始规划"
   }
@@ -366,6 +370,11 @@ const statusLabels = {
       </div>
 
       <form v-if="!conflict" @submit.prevent="createProject">
+		<select v-if="!project || project.status === 'draft'" v-model="mode" aria-label="工作模式">
+		  <option value="engineer">Engineer</option>
+		  <option value="team">Team</option>
+		  <option value="race">Race</option>
+		</select>
         <textarea
           v-model="prompt"
           aria-label="项目需求"
@@ -376,7 +385,7 @@ const statusLabels = {
         <button
           v-if="project?.status === 'awaiting_approval' && !requirementChanged"
           type="button"
-          :disabled="running || !plan || !project.approvalId"
+		  :disabled="running || !plan"
           @click="approvePlan"
         >
           批准并开始构建
@@ -408,7 +417,9 @@ const statusLabels = {
             <p class="eyebrow">{{ project?.status === "building" ? "构建过程" : "规划过程" }}</p>
             <h2>
               {{
-                candidateSnapshot
+                raceCandidates.length
+                  ? "选择竞速方案"
+                  : candidateSnapshot
                   ? "候选源码等待验证"
                   : project?.status === "building"
                     ? "正在生成源码"
@@ -438,7 +449,7 @@ const statusLabels = {
           </li>
         </ol>
 
-        <div v-if="plan && !candidateSnapshot" class="plan">
+        <div v-if="plan && !candidateSnapshot && !raceCandidates.length" class="plan">
           <header class="approval-header"><div><span>待审批执行合同</span><strong>{{ plan.productType === "web_app" ? "Web 应用" : "网站" }}</strong></div><p>批准后，模型只能按下列范围生成源码。</p></header>
           <section v-if="plan.requirementBrief" class="plan-section">
             <h3>产品分析交付</h3><p>{{ plan.requirementBrief.goal }}</p>
@@ -448,10 +459,17 @@ const statusLabels = {
           <section class="plan-section"><h3>方案架构交付</h3><p>{{ plan.productSummary }}</p><div class="plan-inline"><strong>设计方向</strong><span>{{ plan.designDirection }}</span></div></section>
           <section class="plan-section"><h3>功能与页面</h3><div class="plan-columns"><div><strong>核心功能</strong><ul><li v-for="feature in plan.features" :key="feature">{{ feature }}</li></ul></div><div><strong>页面范围</strong><dl><template v-for="page in plan.pages" :key="page.name"><dt>{{ page.name }}</dt><dd>{{ page.purpose }}</dd></template></dl></div></div></section>
           <section class="plan-section"><h3>源码范围</h3><ul class="plan-files"><li v-for="file in plan.filePlan" :key="file.path"><code>{{ file.path }}</code><span>{{ file.responsibility }}</span></li></ul></section>
-          <section class="plan-section"><h3>数据与权限</h3><p v-if="!plan.backend.enabled">本次产品不创建服务端数据模型。</p><template v-else><div class="plan-inline"><strong>认证</strong><span>{{ plan.backend.auth === "email_password" ? "邮箱密码认证" : "无需登录" }}</span></div><ul class="plan-files"><li v-for="collection in plan.backend.collections" :key="collection.name"><code>{{ collection.name }}</code><span>{{ collection.label }} · {{ collection.access === "owner" ? "仅数据所有者" : "公开访问" }} · {{ collection.fields.length }} 个字段</span></li></ul></template></section>
           <section class="plan-section"><h3>验收标准</h3><ol class="acceptance-list"><li v-for="check in plan.acceptanceChecks" :key="check">{{ check }}</li></ol></section>
-          <footer class="approval-actions"><p>批准会锁定当前需求与完整方案，并生成一次性审批凭证。</p><button type="button" :disabled="project?.status !== 'awaiting_approval'" @click="approvePlan">批准并开始构建</button></footer>
+		  <footer class="approval-actions"><p>批准后，Alex 将按当前计划生成受限的 React 应用。</p><button type="button" :disabled="project?.status !== 'awaiting_approval'" @click="approvePlan">批准并开始构建</button></footer>
         </div>
+
+        <section v-if="raceCandidates.length && project?.status === 'building'" class="race-candidates">
+          <header><p class="eyebrow">Race 结果</p><h3>选择一个方向作为正式版本</h3></header>
+          <article v-for="candidate in raceCandidates" :key="candidate.id">
+            <div class="race-candidate-heading"><div><strong>{{ candidate.direction }}</strong><p>{{ candidate.snapshot.summary }}</p></div><button type="button" @click="selectRaceCandidate(candidate.id)">采用此方案</button></div>
+            <PreviewPane :snapshot="candidate.snapshot" :project-id="project?.id" />
+          </article>
+        </section>
 
         <div v-if="candidateSnapshot && project?.status === 'building'" class="candidate">
           <p class="candidate-label">安全检查通过 · 尚未提交版本</p>
@@ -501,6 +519,7 @@ const statusLabels = {
 </template>
 
 <style scoped>
+.race-candidates { display: grid; gap: 12px; }.race-candidates > header h3 { margin: 4px 0 0; font-size: 16px; }.race-candidates > article { padding: 12px; border: 1px solid #41413f; border-radius: 6px; background: #292928; }.race-candidate-heading { margin-bottom: 10px; display: flex; justify-content: space-between; align-items: start; gap: 12px; }.race-candidate-heading strong { color: #eee; }.race-candidate-heading p { margin: 4px 0 0; color: #999; font-size: 12px; }.race-candidate-heading button { min-height: 34px; flex: 0 0 auto; padding: 0 12px; border: 1px solid #666; border-radius: 5px; color: #eee; background: #3b3b39; cursor: pointer; }
 .revision-controls { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 7px; }
 .revision-controls button { min-height: 34px; padding: 0 11px; border: 1px solid #4b4b48; border-radius: 5px; color: #d2d2ce; background: #30302f; cursor: pointer; }
 .revision-controls button:hover { background: #3a3a38; }

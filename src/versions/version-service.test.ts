@@ -6,10 +6,9 @@ const snapshot: ProjectSnapshot = {
   source: "template",
   title: "Task",
   summary: "Board",
-  entryFile: "/src/main.ts",
-  files: { "/src/main.ts": "const title = 'Task'" },
-  dependencies: { vue: "3.5.42" },
-  backend: { enabled: false, auth: "none", collections: [] },
+  entryFile: "/src/App.tsx",
+  files: { "/src/App.tsx": "export default function App() { return <main>Task</main> }" },
+  dependencies: { react: "18.3.1", "react-dom": "18.3.1" },
 }
 
 describe("createVersion", () => {
@@ -21,8 +20,8 @@ describe("createVersion", () => {
 	    snapshot,
 	    sourceAction: "local",
     })
-    snapshot.files["/src/main.ts"] = "changed"
-    expect(version.snapshot.files["/src/main.ts"]).toBe("const title = 'Task'")
+    snapshot.files["/src/App.tsx"] = "changed"
+    expect(version.snapshot.files["/src/App.tsx"]).toContain("function App")
     expect(version.projectId).toBe("p1")
 	  expect(version.parentVersionId).toBe("previous-version")
 	  expect(version.sourceAction).toBe("local")

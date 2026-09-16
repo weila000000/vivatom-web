@@ -53,7 +53,7 @@ export class SandpackPreviewAdapter implements PreviewAdapter {
         files,
         entry: snapshot.entryFile,
         dependencies: snapshot.dependencies,
-        template: "vue-cli",
+		template: "create-react-app-typescript",
       },
       {
         showOpenInCodeSandbox: false,

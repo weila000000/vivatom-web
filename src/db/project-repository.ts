@@ -104,9 +104,18 @@ export class ProjectRepository {
     return this.saveRecovery({ projectId, phase: "snapshot", request, snapshot, repairAttempts, ...candidate })
   }
 
+  async saveRaceRecovery(
+    projectId: string,
+    request: AgentRequest,
+    candidates: import("../types/agent").RaceCandidate[],
+  ): Promise<AgentRunRecovery> {
+    return this.saveRecovery({ projectId, phase: "race", request, candidates })
+  }
+
   private async saveRecovery(
     input:
       | { projectId: string; phase: "request"; request: AgentRequest; repairAttempts?: number }
+      | { projectId: string; phase: "race"; request: AgentRequest; candidates: import("../types/agent").RaceCandidate[] }
       | {
           projectId: string
           phase: "snapshot"
