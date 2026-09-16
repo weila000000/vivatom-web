@@ -22,6 +22,15 @@ export interface HostedPreviewTarget {
   publicKey?: string
 }
 
+export async function verifyHostedPreviewTarget(
+  target: HostedPreviewTarget,
+  signal?: AbortSignal,
+  fetcher: typeof fetch = fetch,
+): Promise<void> {
+  const response = await fetcher(target.artifactUrl, { method: "HEAD", cache: "no-store", signal })
+  if (!response.ok) throw new Error(`artifact_unavailable:${response.status}`)
+}
+
 export function parseHostedPreviewTarget(
   search: string,
   hash: string,

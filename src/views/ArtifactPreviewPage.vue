@@ -1,34 +1,60 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from "vue"
 import { createPreviewRuntimeBridge } from "../services/preview-runtime-bridge"
-import { parseHostedPreviewTarget } from "../versions/preview-url"
+import { parseHostedPreviewTarget, verifyHostedPreviewTarget } from "../versions/preview-url"
 
 const iframe = ref<HTMLIFrameElement>()
 const artifactUrl = ref("")
 const error = ref("")
+const state = ref<"checking" | "loading" | "ready" | "error">("checking")
+const controller = new AbortController()
 let runtimeBridge: ((event: MessageEvent) => void) | undefined
+let loadTimeout: number | undefined
 
 onMounted(async () => {
   const target = parseHostedPreviewTarget(window.location.search, window.location.hash)
   if (!target) {
     error.value = "预览地址无效。"
+    state.value = "error"
     return
   }
-  artifactUrl.value = target.artifactUrl
-  if (target.publicKey) {
-    const bridge = createPreviewRuntimeBridge({
-      projectId: target.projectId,
-      publicKey: target.publicKey,
-      apiBaseUrl: window.location.origin,
-      getPreviewWindow: () => iframe.value?.contentWindow ?? null,
-    })
-    runtimeBridge = (event) => { void bridge(event) }
-    window.addEventListener("message", runtimeBridge)
+  try {
+    await verifyHostedPreviewTarget(target, controller.signal)
+    if (controller.signal.aborted) return
+    state.value = "loading"
+    artifactUrl.value = target.artifactUrl
+    loadTimeout = window.setTimeout(() => fail("正式版本加载超时，请稍后重试。"), 15000)
+    if (target.publicKey) {
+      const bridge = createPreviewRuntimeBridge({
+        projectId: target.projectId,
+        publicKey: target.publicKey,
+        apiBaseUrl: window.location.origin,
+        getPreviewWindow: () => iframe.value?.contentWindow ?? null,
+      })
+      runtimeBridge = (event) => { void bridge(event) }
+      window.addEventListener("message", runtimeBridge)
+    }
+  } catch {
+    if (!controller.signal.aborted) fail("正式版本不存在或完整性验证失败。")
   }
 })
 
+function ready() {
+  if (loadTimeout !== undefined) window.clearTimeout(loadTimeout)
+  state.value = "ready"
+}
+
+function fail(message: string) {
+  if (loadTimeout !== undefined) window.clearTimeout(loadTimeout)
+  error.value = message
+  state.value = "error"
+  artifactUrl.value = ""
+}
+
 onBeforeUnmount(() => {
   if (runtimeBridge) window.removeEventListener("message", runtimeBridge)
+  if (loadTimeout !== undefined) window.clearTimeout(loadTimeout)
+  controller.abort()
 })
 </script>
 
@@ -40,13 +66,15 @@ onBeforeUnmount(() => {
       :src="artifactUrl"
       title="Vivatom 正式版本预览"
       sandbox="allow-forms allow-modals allow-popups allow-presentation allow-scripts"
+      @load="ready"
+      @error="fail('正式版本加载失败。')"
     />
-    <p v-else>{{ error || "正在验证正式版本..." }}</p>
+    <p v-if="state !== 'ready'">{{ error || (state === "checking" ? "正在验证正式版本..." : "正在加载正式版本...") }}</p>
   </main>
 </template>
 
 <style scoped>
-.artifact-preview { width: 100%; min-height: 100vh; margin: 0; background: #fff; }
+.artifact-preview { position: relative; width: 100%; min-height: 100vh; margin: 0; background: #fff; }
 .artifact-preview iframe { display: block; width: 100%; height: 100vh; border: 0; }
-.artifact-preview p { margin: 0; padding: 32px; color: #444; font: 14px/1.6 system-ui, sans-serif; }
+.artifact-preview p { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 32px; color: #444; background: #fff; font: 14px/1.6 system-ui, sans-serif; }
 </style>

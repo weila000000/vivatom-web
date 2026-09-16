@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import type { Version } from "../types/agent"
-import { hostedVersionPreviewUrl, parseHostedPreviewTarget, versionPreviewUrl } from "./preview-url"
+import { hostedVersionPreviewUrl, parseHostedPreviewTarget, verifyHostedPreviewTarget, versionPreviewUrl } from "./preview-url"
 
 describe("version preview URL", () => {
   it("builds an isolated artifact URL", () => {
@@ -42,5 +42,18 @@ describe("version preview URL", () => {
     expect(parseHostedPreviewTarget("?artifact=not-a-hash", "#project=project-1")).toBeUndefined()
     expect(parseHostedPreviewTarget(`?artifact=${"f".repeat(64)}`, `#project=${"p".repeat(201)}`)).toBeUndefined()
     expect(parseHostedPreviewTarget(`?artifact=${"f".repeat(64)}`, `#project=project-1&key=${"k".repeat(513)}`)).toBeUndefined()
+  })
+
+  it("preflights the verified artifact entry without caching", async () => {
+    const fetcher = vi.fn(async () => new Response(null, { status: 200 })) as typeof fetch
+    const target = { artifactUrl: "https://preview.example.com/a/", projectId: "project-1" }
+    await verifyHostedPreviewTarget(target, undefined, fetcher)
+    expect(fetcher).toHaveBeenCalledWith(target.artifactUrl, { method: "HEAD", cache: "no-store", signal: undefined })
+  })
+
+  it("rejects an unavailable artifact before mounting its iframe", async () => {
+    const fetcher = vi.fn(async () => new Response(null, { status: 503 })) as typeof fetch
+    await expect(verifyHostedPreviewTarget({ artifactUrl: "https://preview.example.com/a/", projectId: "project-1" }, undefined, fetcher))
+      .rejects.toThrow("artifact_unavailable:503")
   })
 })
