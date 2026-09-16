@@ -110,4 +110,5 @@ export type AgentRunRecovery =
       snapshot: ProjectSnapshot
       candidateId?: string
       snapshotHash?: string
+      runtimeCredentials?: import("../domain/project").RuntimeCredentials
     })

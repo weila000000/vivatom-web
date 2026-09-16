@@ -13,6 +13,7 @@ import {
 } from "../generation/snapshot-guard"
 import { AgentTransportError, runAgent } from "../services/agent-client"
 import { approveWorkspacePlan, commitBuildCandidate, fetchPendingBuildCandidate, PlatformError, restageWorkspaceVersion } from "../services/platform-client"
+import { createRuntimeProvisionAttempt, RuntimeProvisionError } from "../services/runtime-client"
 import type {
   AgentEvent,
   AgentRequest,
@@ -257,9 +258,35 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
             snapshot,
           })
       }
+      let runtime = project.value.runtime
+      if (snapshot.backend.enabled) {
+        const attempt = createRuntimeProvisionAttempt({
+          projectId: project.value.id,
+          title: snapshot.title,
+          backend: snapshot.backend,
+          runtime: recovery.value?.phase === "snapshot" && recovery.value.runtimeCredentials
+            ? recovery.value.runtimeCredentials
+            : runtime,
+        })
+        if (recovery.value?.phase === "snapshot" && !recovery.value.runtimeCredentials) {
+          recovery.value = await projectRepository.saveSnapshotRecovery(
+            recovery.value.projectId,
+            recovery.value.request,
+            recovery.value.snapshot,
+            recovery.value.repairAttempts ?? 0,
+            {
+              candidateId: recovery.value.candidateId!,
+              snapshotHash: recovery.value.snapshotHash!,
+              runtimeCredentials: attempt.credentials,
+            },
+          )
+        }
+        runtime = await attempt.run()
+      }
       const readyProject = {
         ...transitionProject(project.value, "build_succeeded"),
         activeVersionId: version.id,
+        ...(runtime ? { runtime } : {}),
       }
       await projectRepository.commitVersion(readyProject, version)
       versions.value.push(version)
@@ -273,7 +300,9 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
       }
       error.value = cause instanceof PlatformError && cause.code === "version_conflict"
         ? cause.message
-        : "版本保存失败，候选源码没有被提交。"
+        : cause instanceof RuntimeProvisionError
+          ? cause.message
+          : "版本保存失败，候选源码没有被提交。"
       if (cause instanceof PlatformError && cause.code === "version_conflict") {
         candidateSnapshot.value = undefined
         recovery.value = undefined
@@ -321,6 +350,13 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
     }
     const request = cloneJson(recovery.value.request)
     repairAttempts.value = recovery.value.repairAttempts ?? 0
+    if (recovery.value.phase === "snapshot" && recovery.value.candidateId && recovery.value.snapshotHash) {
+      await transition("retry_build")
+      const snapshot = guardSnapshot(recovery.value.snapshot)
+      candidateSnapshot.value = snapshot
+      await commitCandidate(snapshot, request.prompt ?? request.error ?? projectPrompt.value)
+      return
+    }
     if (request.action === "plan") {
       await transition("retry_plan")
     } else {

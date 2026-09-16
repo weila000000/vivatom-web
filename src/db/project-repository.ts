@@ -1,4 +1,5 @@
 import type { Project } from "../domain/project"
+import type { RuntimeCredentials } from "../domain/project"
 import type {
   AgentEvent,
   AgentRequest,
@@ -98,7 +99,7 @@ export class ProjectRepository {
     request: AgentRequest,
     snapshot: ProjectSnapshot,
     repairAttempts = 0,
-    candidate?: { candidateId: string; snapshotHash: string },
+    candidate?: { candidateId: string; snapshotHash: string; runtimeCredentials?: RuntimeCredentials },
   ): Promise<AgentRunRecovery> {
     return this.saveRecovery({ projectId, phase: "snapshot", request, snapshot, repairAttempts, ...candidate })
   }
@@ -114,6 +115,7 @@ export class ProjectRepository {
           repairAttempts?: number
           candidateId?: string
           snapshotHash?: string
+          runtimeCredentials?: RuntimeCredentials
         },
   ): Promise<AgentRunRecovery> {
     const existing = await this.database.agentRuns.get(input.projectId)

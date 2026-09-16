@@ -61,12 +61,17 @@ describe("ProjectRepository", () => {
     project = transitionProject(project, "approve")
     project = transitionProject(project, "build_succeeded")
     const version = createVersion({ projectId: project.id, prompt: "任务看板", snapshot })
-    project = { ...project, activeVersionId: version.id }
+    project = {
+      ...project,
+      activeVersionId: version.id,
+      runtime: { publicKey: "public-key-123456", adminToken: "admin-token-123456", schemaVersion: 1 },
+    }
     await repository.commitVersion(project, version)
 
     const restored = await repository.restoreLatest()
     expect(restored?.project.status).toBe("ready")
     expect(restored?.activeVersion?.id).toBe(version.id)
+    expect(restored?.project.runtime?.schemaVersion).toBe(1)
   })
 
   it("rolls back the version when its project does not exist", async () => {
@@ -108,8 +113,17 @@ describe("ProjectRepository", () => {
       project.id,
       requestRecovery.request,
       snapshot,
+      0,
+      {
+        candidateId: "candidate-1",
+        snapshotHash: "a".repeat(64),
+        runtimeCredentials: { publicKey: "public-key-123456", adminToken: "admin-token-123456" },
+      },
     )
-    expect((await database.agentRuns.get(project.id))?.phase).toBe("snapshot")
+    const snapshotRecovery = await database.agentRuns.get(project.id)
+    expect(snapshotRecovery?.phase).toBe("snapshot")
+    if (snapshotRecovery?.phase !== "snapshot") throw new Error("snapshot recovery missing")
+    expect(snapshotRecovery.runtimeCredentials?.publicKey).toBe("public-key-123456")
 
     project = {
       ...transitionProject(project, "build_succeeded"),
