@@ -378,8 +378,11 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
         if (project.value.status === "error") {
           await transition("retry_build")
         }
-        candidateSnapshot.value = guardSnapshot(restored.recovery.snapshot)
+        const snapshot = guardSnapshot(restored.recovery.snapshot)
+        candidateSnapshot.value = snapshot
         error.value = ""
+        const resumePrompt = restored.recovery.request.prompt ?? restored.recovery.request.error ?? projectPrompt.value
+        queueMicrotask(() => { void commitCandidate(snapshot, resumePrompt) })
       } else if (restored.recovery?.phase === "request") {
         if (project.value.status === "planning" || project.value.status === "building") {
           await transition("fail")

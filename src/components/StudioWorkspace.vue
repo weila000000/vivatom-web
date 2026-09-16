@@ -8,7 +8,6 @@ import { fetchWorkspaceProjectDocument, PlatformError, recordProjectConflictReso
 import { projectRepository, type ProjectSyncConflict } from "../db/project-repository"
 import { guardSnapshot } from "../generation/snapshot-guard"
 import { cloneAsConflictCopy, summarizeConflict } from "../services/project-conflict"
-import type { Project } from "../domain/project"
 import type { Version } from "../types/agent"
 import { archiveFilename, buildVersionArchive } from "../versions/artifact-export"
 import { versionPreviewUrl } from "../versions/preview-url"
@@ -55,6 +54,20 @@ const conflictSummary = computed(() => conflict.value ? summarizeConflict(confli
 const sourcePaths = computed(() => Object.keys(activeVersion.value?.snapshot.files ?? {}).sort())
 const selectedSource = computed(() => activeVersion.value?.snapshot.files[selectedSourcePath.value] ?? "")
 const requirementChanged = computed(() => prompt.value.trim() !== projectPrompt.value.trim())
+const projectSyncSignature = computed(() => {
+  const value = project.value
+  if (!value) return ""
+  return JSON.stringify({
+    id: value.id,
+    workspaceId: value.workspaceId,
+    title: value.title,
+    status: value.status,
+    plan: value.plan,
+    approvalId: value.approvalId,
+    activeVersionId: value.activeVersionId,
+    updatedAt: value.updatedAt,
+  })
+})
 const canStartPlan = computed(
   () =>
     !running.value &&
@@ -100,7 +113,7 @@ onMounted(async () => {
   if (!prompt.value) prompt.value = projectPrompt.value
   if (project.value) conflict.value = await projectRepository.getConflict(project.value.id)
   syncPaused = false
-  if (project.value && !conflict.value) queueSync(project.value)
+  if (project.value && !conflict.value) queueSync(project.value.id)
 })
 
 watch(() => props.workspaceId, async () => {
@@ -111,7 +124,7 @@ watch(() => props.workspaceId, async () => {
   await restoreLatest(props.workspaceId)
   if (project.value) conflict.value = await projectRepository.getConflict(project.value.id)
   syncPaused = false
-  if (project.value && !conflict.value) queueSync(project.value)
+  if (project.value && !conflict.value) queueSync(project.value.id)
 })
 
 watch(() => props.selectedProjectId, async (projectId) => {
@@ -156,47 +169,52 @@ async function openProject(projectId: string) {
     catalogError.value = cause instanceof PlatformError && cause.code !== "document_not_found" ? cause.message : ""
   } finally {
     syncPaused = false
-    if (project.value && !conflict.value) queueSync(project.value)
+    if (project.value && !conflict.value) queueSync(project.value.id)
   }
 }
 
-watch(project, (value) => {
+watch(projectSyncSignature, () => {
+  const value = project.value
   if (!value || syncPaused || resolvingConflict.value || conflict.value?.projectId === value.id || !props.workspaceId || value.workspaceId !== props.workspaceId) return
-  queueSync(value)
-}, { deep: true })
+  queueSync(value.id)
+})
 
-function queueSync(value: Project) {
+function queueSync(projectId: string) {
   syncQueue = syncQueue.then(async () => {
-    const payload = await projectRepository.exportDocument(value.id)
-    if (payload) {
+    const restored = await projectRepository.restore(projectId)
+    const value = restored?.project
+    const payload = await projectRepository.exportDocument(projectId)
+    if (value && payload) {
       if (!value.cloudRevision) await syncWorkspaceProject(props.workspaceId, props.token, value)
-      const document = await saveWorkspaceProjectDocument(props.workspaceId, value.id, props.token, value.cloudRevision ?? 0, payload)
+      const document = await saveWorkspaceProjectDocument(props.workspaceId, projectId, props.token, value.cloudRevision ?? 0, payload)
       await setCloudState(document.revision, document.contentHash)
       await syncWorkspaceProject(props.workspaceId, props.token, value)
     }
     catalogError.value = ""
-    emit("catalogChanged", value.id)
+    emit("catalogChanged", projectId)
   }).catch(async (cause) => {
     if (cause instanceof PlatformError && cause.code === "document_conflict") {
-      await captureConflict(value)
+      await captureConflict(projectId)
       return
     }
     if (cause instanceof PlatformError && cause.code === "immutable_version_violation") {
       catalogError.value = "云端拒绝改写已发布版本，请从正式版本创建新的修改。"
       return
     }
-    catalogError.value = "项目已保存在此设备，云端同步将在网络恢复后重试。"
+    catalogError.value = cause instanceof PlatformError
+      ? `云端同步失败：${cause.message}`
+      : "项目已保存在此设备，云端同步将在网络恢复后重试。"
   })
 }
 
-async function captureConflict(value: Project) {
+async function captureConflict(projectId: string) {
   try {
     const [localPayload, cloudDocument] = await Promise.all([
-      projectRepository.exportDocument(value.id),
-      fetchWorkspaceProjectDocument(props.workspaceId, value.id, props.token),
+      projectRepository.exportDocument(projectId),
+      fetchWorkspaceProjectDocument(props.workspaceId, projectId, props.token),
     ])
     if (!localPayload) return
-    const record = { projectId: value.id, workspaceId: props.workspaceId, localPayload, cloudDocument, createdAt: new Date().toISOString() }
+    const record = { projectId, workspaceId: props.workspaceId, localPayload, cloudDocument, createdAt: new Date().toISOString() }
     await projectRepository.saveConflict(record)
     conflict.value = record
     catalogError.value = ""
@@ -248,7 +266,7 @@ async function resolveWithLocal() {
     await restoreProject(current.projectId)
     emit("catalogChanged", current.projectId)
   } catch (cause) {
-    if (cause instanceof PlatformError && cause.code === "document_conflict" && project.value) await captureConflict(project.value)
+    if (cause instanceof PlatformError && cause.code === "document_conflict" && project.value) await captureConflict(project.value.id)
     else catalogError.value = "冲突处理未完成，两份内容仍已保留。"
   } finally {
     resolvingConflict.value = false
