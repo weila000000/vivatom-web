@@ -35,6 +35,7 @@ export async function* parseSSE(stream: ReadableStream<Uint8Array>): AsyncGenera
   const reader = stream.getReader()
   const decoder = new TextDecoder()
   let buffer = ""
+  let sawDone = false
 
   try {
     while (true) {
@@ -45,14 +46,23 @@ export async function* parseSSE(stream: ReadableStream<Uint8Array>): AsyncGenera
       while (boundary >= 0) {
         const event = parseBlock(buffer.slice(0, boundary))
         buffer = buffer.slice(boundary + 2)
-        if (event) yield event
+        if (event) {
+          if (event.type === "done") sawDone = true
+          yield event
+        }
         boundary = buffer.indexOf("\n\n")
       }
     }
     const tail = buffer.trim()
     if (tail) {
       const event = parseBlock(tail)
-      if (event) yield event
+      if (event) {
+        if (event.type === "done") sawDone = true
+        yield event
+      }
+    }
+    if (!sawDone) {
+      throw new AgentTransportError("incomplete_stream", "Agent 事件流意外中断，请重试")
     }
   } finally {
     reader.releaseLock()

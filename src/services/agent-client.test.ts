@@ -38,4 +38,23 @@ describe("parseSSE", () => {
     }
     await expect(read()).rejects.toBeInstanceOf(AgentTransportError)
   })
+
+  it("ignores heartbeat comments and requires a done event", async () => {
+    const complete = streamFrom([
+      ': connected\n\n: keepalive\n\nevent: done\ndata: {"type":"done"}\n\n',
+    ])
+    const events = []
+    for await (const event of parseSSE(complete)) events.push(event)
+    expect(events).toEqual([{ type: "done" }])
+
+    const incomplete = streamFrom([
+      ': keepalive\n\nevent: agent.started\ndata: {"type":"agent.started"}\n\n',
+    ])
+    const read = async () => {
+      for await (const _event of parseSSE(incomplete)) {
+        // Consume the stream.
+      }
+    }
+    await expect(read()).rejects.toMatchObject({ code: "incomplete_stream" })
+  })
 })
