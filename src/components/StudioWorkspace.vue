@@ -35,8 +35,6 @@ const {
   approveAndBuild,
 	revise,
   restoreVersion,
-  commitCandidate,
-  rejectCandidate,
   cancel,
   retryRecovery,
   restoreLatest,
@@ -296,12 +294,6 @@ function downloadActiveVersion() {
   URL.revokeObjectURL(url)
 }
 
-function acceptCompiledSnapshot() {
-  if (candidateSnapshot.value) {
-    void commitCandidate(candidateSnapshot.value, prompt.value.trim())
-  }
-}
-
 const statusLabels = {
   draft: "草稿",
   planning: "规划中",
@@ -443,8 +435,6 @@ const statusLabels = {
           v-if="candidateSnapshot && project?.status === 'building'"
           :key="`${project?.id}:${repairAttempts}`"
           :snapshot="candidateSnapshot"
-          @ready="acceptCompiledSnapshot"
-          @error="rejectCandidate"
         />
 
         <div v-if="activeVersion" class="version-summary">

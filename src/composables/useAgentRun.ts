@@ -86,6 +86,10 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
               attempts,
               { candidateId: event.candidateId, snapshotHash: event.snapshotHash },
             )
+            await commitCandidate(
+              candidateSnapshot.value,
+              request.prompt ?? request.error ?? projectPrompt.value,
+            )
           } catch (cause) {
             error.value =
               cause instanceof SnapshotRejectedError
@@ -197,6 +201,7 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
     candidateSnapshot.value = guardSnapshot(staged.snapshot)
     const request: AgentRequest = { action: "repair", projectId: project.value.id, error: instruction, snapshot: staged.snapshot }
     recovery.value = await projectRepository.saveSnapshotRecovery(project.value.id, request, candidateSnapshot.value, 0, { candidateId: staged.candidateId, snapshotHash: staged.snapshotHash })
+    await commitCandidate(candidateSnapshot.value, instruction)
   }
 
   async function commitCandidate(snapshot: ProjectSnapshot, prompt: string) {
@@ -405,8 +410,6 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
     approveAndBuild,
 	revise,
     restoreVersion,
-    commitCandidate,
-    rejectCandidate,
     cancel,
     retryRecovery,
     restoreLatest,
