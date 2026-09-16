@@ -187,11 +187,17 @@ export class ProjectRepository {
   async exportDocument(projectId: string): Promise<ProjectDocumentPayload | undefined> {
     const restored = await this.restore(projectId)
     if (!restored) return undefined
-    const { cloudRevision: _revision, cloudContentHash: _hash, ...project } = restored.project
+    const trustedVersions = restored.versions.filter((version) =>
+      Boolean(version.candidateId && version.snapshotHash && version.build && version.safety),
+    )
+    const activeVersionId = trustedVersions.some((version) => version.id === restored.project.activeVersionId)
+      ? restored.project.activeVersionId
+      : undefined
+    const { cloudRevision: _revision, cloudContentHash: _hash, activeVersionId: _localActiveVersionId, ...project } = restored.project
     return {
-      project: cloneJson(project),
+      project: cloneJson({ ...project, ...(activeVersionId ? { activeVersionId } : {}) }),
       messages: cloneJson(restored.messages),
-      versions: cloneJson(restored.versions),
+      versions: cloneJson(trustedVersions),
     }
   }
 

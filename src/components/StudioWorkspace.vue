@@ -191,10 +191,10 @@ function queueSync(projectId: string) {
     const value = restored?.project
     const payload = await projectRepository.exportDocument(projectId)
     if (value && payload) {
-      if (!value.cloudRevision) await syncWorkspaceProject(props.workspaceId, props.token, value)
+      if (!value.cloudRevision) await syncWorkspaceProject(props.workspaceId, props.token, payload.project)
       const document = await saveWorkspaceProjectDocument(props.workspaceId, projectId, props.token, value.cloudRevision ?? 0, payload)
       await setCloudState(document.revision, document.contentHash)
-      await syncWorkspaceProject(props.workspaceId, props.token, value)
+      await syncWorkspaceProject(props.workspaceId, props.token, payload.project)
     }
     catalogError.value = ""
     emit("catalogChanged", projectId)
