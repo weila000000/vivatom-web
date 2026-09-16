@@ -36,6 +36,7 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
   const recovery = ref<AgentRunRecovery>()
   const repairAttempts = ref(0)
 	const maxAutomaticRepairs = 2
+	const maxCompileWaits = 120
   let controller: AbortController | undefined
 
   async function transition(command: ProjectCommand, changes: Partial<Project> = {}) {
@@ -222,11 +223,26 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
         const compiling: AgentEvent = { type: "action.status", id: "compile", agent: "compiler", action: "compile_snapshot", status: "running", label: "正在隔离环境中编译候选源码" }
         events.value.push(compiling)
         await projectRepository.addAgentEvent(project.value.id, compiling)
-        version = await commitBuildCandidate(workspaceId(), project.value.id, candidateReceipt.candidateId, token(), {
-            snapshotHash: candidateReceipt.snapshotHash,
-            parentVersionId: activeVersion.value?.candidateId ? activeVersion.value.id : undefined,
-            prompt: versionPrompt,
-          })
+        let waits = 0
+        while (true) {
+          try {
+            version = await commitBuildCandidate(workspaceId(), project.value.id, candidateReceipt.candidateId, token(), {
+              snapshotHash: candidateReceipt.snapshotHash,
+              parentVersionId: activeVersion.value?.candidateId ? activeVersion.value.id : undefined,
+              prompt: versionPrompt,
+            })
+            error.value = ""
+            break
+          } catch (cause) {
+            if (!(cause instanceof PlatformError) || cause.code !== "compile_in_progress" || waits >= maxCompileWaits) {
+              throw cause
+            }
+            waits += 1
+            error.value = "候选源码正在隔离编译，等待验证结果..."
+            await new Promise((resolve) => window.setTimeout(resolve, 1_000))
+            if (project.value?.status !== "building" || candidateSnapshot.value !== snapshot) return
+          }
+        }
         const compiled: AgentEvent = { type: "action.status", id: "compile", agent: "compiler", action: "compile_snapshot", status: "completed", label: `隔离编译通过 · ${version.build?.durationMs ?? 0} ms` }
         events.value.push(compiled)
         await projectRepository.addAgentEvent(project.value.id, compiled)
