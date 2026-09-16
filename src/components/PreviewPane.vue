@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from "vue"
 import { SandpackPreviewAdapter } from "../preview/preview-adapter"
+import type { ProjectRuntime } from "../domain/project"
+import { createPreviewRuntimeBridge } from "../services/preview-runtime-bridge"
 import type { ProjectSnapshot } from "../types/agent"
 
-const props = defineProps<{ snapshot: ProjectSnapshot }>()
+const props = defineProps<{ snapshot: ProjectSnapshot; projectId?: string; runtime?: ProjectRuntime }>()
 const emit = defineEmits<{
   ready: [snapshot: ProjectSnapshot]
   error: [message: string]
@@ -13,9 +15,20 @@ const iframe = ref<HTMLIFrameElement>()
 const state = ref<"compiling" | "ready" | "error">("compiling")
 const adapter = new SandpackPreviewAdapter()
 const controller = new AbortController()
+let runtimeBridge: ((event: MessageEvent) => void) | undefined
 
 onMounted(async () => {
   if (!iframe.value) return
+  if (props.projectId && props.runtime) {
+    const bridge = createPreviewRuntimeBridge({
+      projectId: props.projectId,
+      publicKey: props.runtime.publicKey,
+      apiBaseUrl: window.location.origin,
+      getPreviewWindow: () => iframe.value?.contentWindow ?? null,
+    })
+    runtimeBridge = (event) => { void bridge(event) }
+    window.addEventListener("message", runtimeBridge)
+  }
   try {
     await adapter.compile(iframe.value, props.snapshot, controller.signal)
     state.value = "ready"
@@ -28,6 +41,7 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  if (runtimeBridge) window.removeEventListener("message", runtimeBridge)
   controller.abort()
   adapter.dispose()
 })

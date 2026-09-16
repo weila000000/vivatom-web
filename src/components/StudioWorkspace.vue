@@ -467,6 +467,8 @@ const statusLabels = {
           v-if="candidateSnapshot && project?.status === 'building'"
           :key="`${project?.id}:${repairAttempts}`"
           :snapshot="candidateSnapshot"
+          :project-id="project?.id"
+          :runtime="project?.runtime"
         />
 
         <div v-if="activeVersion" class="version-summary">
