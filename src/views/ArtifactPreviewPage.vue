@@ -1,39 +1,24 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from "vue"
-import { useRoute } from "vue-router"
-import { projectRepository } from "../db/project-repository"
 import { createPreviewRuntimeBridge } from "../services/preview-runtime-bridge"
-import { versionPreviewUrl } from "../versions/preview-url"
+import { parseHostedPreviewTarget } from "../versions/preview-url"
 
-const route = useRoute()
 const iframe = ref<HTMLIFrameElement>()
 const artifactUrl = ref("")
 const error = ref("")
 let runtimeBridge: ((event: MessageEvent) => void) | undefined
 
 onMounted(async () => {
-  const projectId = typeof route.query.project === "string" ? route.query.project : ""
-  const artifactId = typeof route.query.artifact === "string" ? route.query.artifact : ""
-  if (!projectId || !/^[a-f0-9]{64}$/.test(artifactId)) {
+  const target = parseHostedPreviewTarget(window.location.search, window.location.hash)
+  if (!target) {
     error.value = "预览地址无效。"
     return
   }
-  const restored = await projectRepository.restore(projectId)
-  const version = restored?.versions.find((item) => item.build?.artifactId === artifactId)
-  if (!restored || !version) {
-    error.value = "本机没有这个正式版本，或版本记录已失效。"
-    return
-  }
-  const url = versionPreviewUrl(version)
-  if (!url) {
-    error.value = "正式版本没有可信构建产物。"
-    return
-  }
-  artifactUrl.value = url
-  if (restored.project.runtime) {
+  artifactUrl.value = target.artifactUrl
+  if (target.publicKey) {
     const bridge = createPreviewRuntimeBridge({
-      projectId,
-      publicKey: restored.project.runtime.publicKey,
+      projectId: target.projectId,
+      publicKey: target.publicKey,
       apiBaseUrl: window.location.origin,
       getPreviewWindow: () => iframe.value?.contentWindow ?? null,
     })

@@ -43,7 +43,7 @@ const {
   setCloudState,
 } = useAgentRun(() => props.token, () => props.workspaceId, () => emit("usageChanged"))
 const activePreviewUrl = computed(() => activeVersion.value && project.value
-  ? hostedVersionPreviewUrl(activeVersion.value, project.value.id)
+  ? hostedVersionPreviewUrl(activeVersion.value, project.value.id, project.value.runtime?.publicKey)
   : undefined)
 const remoteOnly = ref(false)
 const catalogError = ref("")
