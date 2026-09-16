@@ -377,6 +377,10 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
       if (restored.recovery?.phase === "snapshot") {
         if (project.value.status === "error") {
           await transition("retry_build")
+        } else if (project.value.status !== "building") {
+          const resumed = { ...project.value, status: "building" as const, updatedAt: new Date().toISOString() }
+          await projectRepository.saveProject(resumed)
+          project.value = resumed
         }
         const snapshot = guardSnapshot(restored.recovery.snapshot)
         candidateSnapshot.value = snapshot
