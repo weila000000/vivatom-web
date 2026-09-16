@@ -8,3 +8,9 @@ export function versionPreviewUrl(
   if (!artifactId || !/^[a-f0-9]{64}$/.test(artifactId)) return undefined
   return `${baseUrl.replace(/\/+$/, "")}/${artifactId}/`
 }
+
+export function hostedVersionPreviewUrl(version: Version, projectId: string): string | undefined {
+  if (!versionPreviewUrl(version) || !projectId) return undefined
+  const query = new URLSearchParams({ project: projectId, artifact: version.build!.artifactId! })
+  return `/preview?${query.toString()}`
+}

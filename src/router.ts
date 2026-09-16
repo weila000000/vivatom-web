@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from "vue-router"
 import LandingPage from "./views/LandingPage.vue"
 import LoginPage from "./views/LoginPage.vue"
 import TenantPage from "./views/TenantPage.vue"
+import ArtifactPreviewPage from "./views/ArtifactPreviewPage.vue"
 import { readTenantSession } from "./services/tenant-session"
 
 export const router = createRouter({
@@ -10,6 +11,7 @@ export const router = createRouter({
     { path: "/", component: LandingPage },
     { path: "/login", component: LoginPage },
     { path: "/app", component: TenantPage },
+    { path: "/preview", component: ArtifactPreviewPage },
   ],
   scrollBehavior: () => ({ top: 0 }),
 })

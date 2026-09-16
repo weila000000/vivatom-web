@@ -70,6 +70,7 @@ export function createPreviewRuntimeBridge(options: BridgeOptions) {
     if (!previewWindow || event.source !== previewWindow) return
     const request = parseRequest(event.data, options.projectId)
     if (!request) return
+    const responseOrigin = event.origin === "null" ? "*" : event.origin
     try {
       const headers: Record<string, string> = { "content-type": "application/json", "X-Vivatom-App-Key": options.publicKey }
       if (request.sessionToken) headers.Authorization = `Bearer ${request.sessionToken}`
@@ -84,7 +85,7 @@ export function createPreviewRuntimeBridge(options: BridgeOptions) {
         ok: response.ok,
         status: response.status,
         payload: jsonPayload(await response.text()),
-      }, event.origin)
+      }, responseOrigin)
     } catch {
       previewWindow.postMessage({
         type: previewRuntimeResponseType,
@@ -92,7 +93,7 @@ export function createPreviewRuntimeBridge(options: BridgeOptions) {
         ok: false,
         status: 503,
         payload: { error: { code: "runtime_unavailable", message: "项目数据服务暂时不可用。" } },
-      }, event.origin)
+      }, responseOrigin)
     }
   }
 }

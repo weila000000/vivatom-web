@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { Version } from "../types/agent"
-import { versionPreviewUrl } from "./preview-url"
+import { hostedVersionPreviewUrl, versionPreviewUrl } from "./preview-url"
 
 describe("version preview URL", () => {
   it("builds an isolated artifact URL", () => {
@@ -16,5 +16,11 @@ describe("version preview URL", () => {
 
   it("does not expose versions without a valid artifact", () => {
     expect(versionPreviewUrl({ build: { toolchain: "vite", durationMs: 10 } } as Version)).toBeUndefined()
+  })
+
+  it("binds the hosted preview to a project and immutable artifact", () => {
+    const version = { build: { toolchain: "vite", durationMs: 10, artifactId: "c".repeat(64) } } as Version
+    expect(hostedVersionPreviewUrl(version, "project / one"))
+      .toBe(`/preview?project=project+%2F+one&artifact=${"c".repeat(64)}`)
   })
 })

@@ -10,7 +10,7 @@ import { guardSnapshot } from "../generation/snapshot-guard"
 import { cloneAsConflictCopy, summarizeConflict } from "../services/project-conflict"
 import type { Version } from "../types/agent"
 import { archiveFilename, buildVersionArchive } from "../versions/artifact-export"
-import { versionPreviewUrl } from "../versions/preview-url"
+import { hostedVersionPreviewUrl } from "../versions/preview-url"
 
 const props = defineProps<{ token: string; workspaceId: string; selectedProjectId?: string }>()
 const emit = defineEmits<{ catalogChanged: [projectId: string]; usageChanged: [] }>()
@@ -42,7 +42,9 @@ const {
   clearWorkspace,
   setCloudState,
 } = useAgentRun(() => props.token, () => props.workspaceId, () => emit("usageChanged"))
-const activePreviewUrl = computed(() => activeVersion.value ? versionPreviewUrl(activeVersion.value) : undefined)
+const activePreviewUrl = computed(() => activeVersion.value && project.value
+  ? hostedVersionPreviewUrl(activeVersion.value, project.value.id)
+  : undefined)
 const remoteOnly = ref(false)
 const catalogError = ref("")
 const conflict = ref<ProjectSyncConflict>()

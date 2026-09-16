@@ -34,4 +34,15 @@ describe("preview runtime bridge", () => {
     await bridge(message(previewWindow, { type: previewRuntimeRequestType, id: "three", projectId, path: "/../provision", method: "POST" }))
     expect(fetchRuntime).not.toHaveBeenCalled()
   })
+
+  it("responds to a verified opaque-origin artifact", async () => {
+    const postMessage = vi.fn()
+    const previewWindow = { postMessage } as unknown as Window
+    const fetchRuntime = vi.fn(async () => new Response(JSON.stringify({ data: [] }), { status: 200 }))
+    const bridge = createPreviewRuntimeBridge({ projectId, publicKey: "public-key", apiBaseUrl: "", getPreviewWindow: () => previewWindow, fetchRuntime })
+
+    await bridge({ source: previewWindow, origin: "null", data: { type: previewRuntimeRequestType, id: "opaque", projectId, path: "/collections/tasks", method: "GET" } })
+
+    expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({ id: "opaque", ok: true }), "*")
+  })
 })
