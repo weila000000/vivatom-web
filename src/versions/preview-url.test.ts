@@ -9,6 +9,11 @@ describe("version preview URL", () => {
       .toBe(`https://preview.example.com/apps/${"a".repeat(64)}/`)
   })
 
+  it("uses the public preview port by default", () => {
+    const version = { build: { toolchain: "vite", durationMs: 10, artifactId: "b".repeat(64) } } as Version
+    expect(versionPreviewUrl(version)).toBe(`http://localhost:8091/preview/${"b".repeat(64)}/`)
+  })
+
   it("does not expose versions without a valid artifact", () => {
     expect(versionPreviewUrl({ build: { toolchain: "vite", durationMs: 10 } } as Version)).toBeUndefined()
   })
