@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { acceptWorkspaceInvitation, approveWorkspacePlan, changeWorkspaceMemberRole, commitBuildCandidate, fetchWorkspaceProjectDocument, fetchWorkspaceUsage, inviteWorkspaceMember, listWorkspaceAudit, listWorkspaceMembers, listWorkspaceProjects, loginPlatformAccount, logoutPlatformAccount, PlatformError, recordProjectConflictResolution, removeWorkspaceMember, restageWorkspaceVersion, saveWorkspaceProjectDocument, syncWorkspaceProject } from "./platform-client"
+import { acceptWorkspaceInvitation, approveWorkspacePlan, changeWorkspaceMemberRole, commitBuildCandidate, fetchPendingBuildCandidate, fetchWorkspaceProjectDocument, fetchWorkspaceUsage, inviteWorkspaceMember, listWorkspaceAudit, listWorkspaceMembers, listWorkspaceProjects, loginPlatformAccount, logoutPlatformAccount, PlatformError, recordProjectConflictResolution, removeWorkspaceMember, restageWorkspaceVersion, saveWorkspaceProjectDocument, syncWorkspaceProject } from "./platform-client"
 
 describe("platform client", () => {
   it("decodes the stable authentication envelope", async () => {
@@ -92,6 +92,16 @@ describe("platform client", () => {
     expect(fetcher).toHaveBeenCalledWith(
       "/api/platform/workspaces/w%2F1/projects/p%2F1/candidates/candidate%2F1/commit",
       expect.objectContaining({ method: "POST", body: JSON.stringify({ snapshotHash: "a".repeat(64), prompt: "任务板" }) }),
+    )
+  })
+
+  it("recovers the latest pending candidate through the scoped project route", async () => {
+    const candidate = { candidateId: "candidate_2", snapshotHash: "b".repeat(64), prompt: "任务板", snapshot: {} as never }
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({ data: candidate }), { status: 200 }))
+    await expect(fetchPendingBuildCandidate("w/1", "p/1", "secret", fetcher)).resolves.toEqual(candidate)
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/platform/workspaces/w%2F1/projects/p%2F1/candidates/pending",
+      expect.objectContaining({ method: "GET", headers: expect.objectContaining({ Authorization: "Bearer secret" }) }),
     )
   })
 

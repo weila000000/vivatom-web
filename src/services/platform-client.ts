@@ -203,6 +203,13 @@ export function commitBuildCandidate(
   }, fetcher)
 }
 
+export function fetchPendingBuildCandidate(workspaceId: string, projectId: string, token: string, fetcher?: Fetcher) {
+  return request<{ candidateId: string; snapshotHash: string; prompt: string; snapshot: Version["snapshot"] }>(`/api/platform/workspaces/${encodeURIComponent(workspaceId)}/projects/${encodeURIComponent(projectId)}/candidates/pending`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+  }, fetcher)
+}
+
 export function restageWorkspaceVersion(workspaceId: string, projectId: string, versionId: string, token: string, fetcher?: Fetcher) {
   return request<{ candidateId: string; snapshotHash: string; prompt: string; snapshot: Version["snapshot"] }>(`/api/platform/workspaces/${encodeURIComponent(workspaceId)}/projects/${encodeURIComponent(projectId)}/versions/${encodeURIComponent(versionId)}/restage`, {
     method: "POST",

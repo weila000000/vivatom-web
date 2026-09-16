@@ -4,6 +4,7 @@ import {
   transitionProject,
   type Project,
   type ProjectCommand,
+  type ProjectStatus,
 } from "../domain/project"
 import { projectRepository } from "../db/project-repository"
 import {
@@ -11,7 +12,7 @@ import {
   SnapshotRejectedError,
 } from "../generation/snapshot-guard"
 import { AgentTransportError, runAgent } from "../services/agent-client"
-import { approveWorkspacePlan, commitBuildCandidate, PlatformError, restageWorkspaceVersion } from "../services/platform-client"
+import { approveWorkspacePlan, commitBuildCandidate, fetchPendingBuildCandidate, PlatformError, restageWorkspaceVersion } from "../services/platform-client"
 import type {
   AgentEvent,
   AgentRequest,
@@ -392,7 +393,46 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
           await transition("fail")
         }
         error.value = "上次任务被页面刷新中断，可以从检查点重试。"
+      } else if (project.value.status !== "ready") {
+        queueMicrotask(() => { void resumeServerCandidate() })
       }
+  }
+
+  async function resumeServerCandidate() {
+    if (!project.value || recovery.value || project.value.status === "ready") return
+    let pending
+    try {
+      pending = await fetchPendingBuildCandidate(workspaceId(), project.value.id, token())
+    } catch (cause) {
+      if (cause instanceof PlatformError && cause.code === "candidate_not_found") return
+      error.value = cause instanceof Error ? cause.message : "无法恢复云端候选源码"
+      return
+    }
+    const current = project.value
+    if (!current || recovery.value || (current.status as ProjectStatus) === "ready") return
+    if (current.status !== "building") {
+      const resumed = { ...current, status: "building" as const, updatedAt: new Date().toISOString() }
+      await projectRepository.saveProject(resumed)
+      project.value = resumed
+    }
+    let snapshot: ProjectSnapshot
+    try {
+      snapshot = guardSnapshot(pending.snapshot)
+    } catch {
+      error.value = "云端候选源码未通过安全检查，无法恢复。"
+      return
+    }
+    candidateSnapshot.value = snapshot
+    projectPrompt.value = pending.prompt
+    const request: AgentRequest = { action: "repair", projectId: project.value.id, error: pending.prompt, snapshot }
+    recovery.value = await projectRepository.saveSnapshotRecovery(project.value.id, request, snapshot, 0, {
+      candidateId: pending.candidateId,
+      snapshotHash: pending.snapshotHash,
+    })
+    const resumed: AgentEvent = { type: "action.status", id: "candidate-recovered", agent: "compiler", action: "recover_candidate", status: "completed", label: "已从云端恢复候选源码" }
+    events.value.push(resumed)
+    await projectRepository.addAgentEvent(project.value.id, resumed)
+    await commitCandidate(snapshot, pending.prompt)
   }
 
   async function setCloudState(revision: number, contentHash: string) {
