@@ -55,6 +55,17 @@ function agentActionLabel(value: unknown) {
   const labels: Record<string, string> = { plan: "需求规划", build: "源码构建", iterate: "功能迭代", repair: "问题修复", polish: "体验打磨" }
   return typeof value === "string" ? labels[value] ?? value : "Agent 任务"
 }
+function resultCodeLabel(value: unknown) {
+  const labels: Record<string, string> = {
+    server_restarted: "服务重启，任务已中断",
+    client_cancelled: "用户停止任务",
+    provider_timeout: "模型响应超时",
+    runner_unavailable: "任务执行器不可用",
+    compile_failed: "源码编译失败",
+    compiler_unavailable: "隔离编译服务不可用",
+  }
+  return typeof value === "string" ? labels[value] ?? value : "原因未知"
+}
 function actionLabel(event: AuditEvent) {
   const labels: Record<string, string> = {
     "member.invited": "创建了成员邀请",
@@ -71,9 +82,9 @@ function actionLabel(event: AuditEvent) {
       ? `完成了${agentActionLabel(event.metadata.action)}`
       : event.metadata.status === "cancelled"
         ? `取消了${agentActionLabel(event.metadata.action)}`
-        : `${agentActionLabel(event.metadata.action)}失败（${event.metadata.resultCode ?? "unknown"}）`,
+        : `${agentActionLabel(event.metadata.action)}失败（${resultCodeLabel(event.metadata.resultCode)}）`,
     "candidate.rejected": `拒绝了过期候选（${event.metadata.reason ?? "unknown"}）`,
-    "candidate.compile_failed": `候选编译失败（${event.metadata.resultCode ?? "unknown"}）`,
+    "candidate.compile_failed": `候选编译失败（${resultCodeLabel(event.metadata.resultCode)}）`,
     "version.restaged": "从历史版本创建了恢复候选",
     "version.committed": "提交并激活了不可变版本",
   }
