@@ -23,6 +23,7 @@ import type {
 } from "../types/agent"
 import { createVersion } from "../versions/version-service"
 import { cloneJson } from "../utils/clone-json"
+import { keyedSingleFlight } from "../utils/keyed-single-flight"
 
 export function useAgentRun(token: () => string, workspaceId: () => string, onUsageChanged?: () => void) {
   const project = ref<Project>()
@@ -399,21 +400,24 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
       }
   }
 
-  async function resumeServerCandidate() {
-    if (!project.value || recovery.value || project.value.status === "ready") return
+  const recoverServerCandidate = keyedSingleFlight(async (projectId: string) => {
+    const requestedWorkspaceId = workspaceId()
+    if (!project.value || project.value.id !== projectId || recovery.value || project.value.status === "ready") return
     let pending
     try {
-      pending = await fetchPendingBuildCandidate(workspaceId(), project.value.id, token())
+      pending = await fetchPendingBuildCandidate(requestedWorkspaceId, projectId, token())
     } catch (cause) {
       if (cause instanceof PlatformError && cause.code === "candidate_not_found") return
+      if (project.value?.id !== projectId || workspaceId() !== requestedWorkspaceId) return
       error.value = cause instanceof Error ? cause.message : "无法恢复云端候选源码"
       return
     }
     const current = project.value
-    if (!current || recovery.value || (current.status as ProjectStatus) === "ready") return
+    if (!current || current.id !== projectId || workspaceId() !== requestedWorkspaceId || recovery.value || (current.status as ProjectStatus) === "ready") return
     if (current.status !== "building") {
       const resumed = { ...current, status: "building" as const, updatedAt: new Date().toISOString() }
       await projectRepository.saveProject(resumed)
+      if (project.value?.id !== projectId || workspaceId() !== requestedWorkspaceId) return
       project.value = resumed
     }
     let snapshot: ProjectSnapshot
@@ -425,15 +429,23 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
     }
     candidateSnapshot.value = snapshot
     projectPrompt.value = pending.prompt
-    const request: AgentRequest = { action: "repair", projectId: project.value.id, error: pending.prompt, snapshot }
-    recovery.value = await projectRepository.saveSnapshotRecovery(project.value.id, request, snapshot, 0, {
+    const request: AgentRequest = { action: "repair", projectId, error: pending.prompt, snapshot }
+    const restoredRecovery = await projectRepository.saveSnapshotRecovery(projectId, request, snapshot, 0, {
       candidateId: pending.candidateId,
       snapshotHash: pending.snapshotHash,
     })
+    if (project.value?.id !== projectId || workspaceId() !== requestedWorkspaceId) return
+    recovery.value = restoredRecovery
     const resumed: AgentEvent = { type: "action.status", id: "candidate-recovered", agent: "compiler", action: "recover_candidate", status: "completed", label: "已从云端恢复候选源码" }
     events.value.push(resumed)
-    await projectRepository.addAgentEvent(project.value.id, resumed)
+    await projectRepository.addAgentEvent(projectId, resumed)
+    if (project.value?.id !== projectId || workspaceId() !== requestedWorkspaceId) return
     await commitCandidate(snapshot, pending.prompt)
+  })
+
+  async function resumeServerCandidate() {
+    if (!project.value || recovery.value || project.value.status === "ready") return
+    await recoverServerCandidate(project.value.id)
   }
 
   async function setCloudState(revision: number, contentHash: string) {
