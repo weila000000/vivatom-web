@@ -79,6 +79,8 @@ export interface RaceCandidate {
   id: string
   direction: string
   snapshot: ProjectSnapshot
+  candidateId?: string
+  snapshotHash?: string
 }
 
 export interface Version {

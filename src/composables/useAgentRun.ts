@@ -12,7 +12,7 @@ import {
   SnapshotRejectedError,
 } from "../generation/snapshot-guard"
 import { AgentTransportError, runAgent } from "../services/agent-client"
-import { commitBuildCandidate, fetchPendingBuildCandidate, PlatformError, restageWorkspaceVersion } from "../services/platform-client"
+import { approveWorkspacePlan, commitBuildCandidate, fetchPendingBuildCandidate, PlatformError, restageWorkspaceVersion } from "../services/platform-client"
 import { createRuntimeProvisionAttempt, RuntimeProvisionError } from "../services/runtime-client"
 import type {
   AgentEvent,
@@ -70,10 +70,15 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
         events.value.push(event)
         await projectRepository.addAgentEvent(request.projectId, event)
         if (event.type === "approval.required" && event.plan) {
-				plan.value = event.plan
-				await transition("plan_ready", { plan: event.plan })
-				await projectRepository.clearRecovery(request.projectId)
-				recovery.value = undefined
+          if (!event.approvalId) {
+            error.value = "方案审批凭证缺失，请重新生成方案。"
+            await failActiveProject()
+          } else {
+            plan.value = event.plan
+            await transition("plan_ready", { plan: event.plan, approvalId: event.approvalId })
+            await projectRepository.clearRecovery(request.projectId)
+            recovery.value = undefined
+          }
         }
         if (event.type === "snapshot.completed" && event.candidates?.length) {
           try {
@@ -176,6 +181,12 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
 	if (!project.value || !plan.value) {
       throw new Error("没有可批准的方案")
     }
+	if (!project.value.approvalId) {
+		await transition("revise_plan")
+		await execute({ action: "plan", mode: project.value.mode ?? "team", projectId: project.value.id, prompt: prompt.trim() || projectPrompt.value })
+		return
+	}
+	await approveWorkspacePlan(workspaceId(), project.value.id, project.value.approvalId, token())
 	await transition("approve")
     candidateSnapshot.value = undefined
 	raceCandidates.value = []
@@ -186,6 +197,7 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
 		action: project.value.mode === "race" ? "race" : "build",
 		mode: project.value.mode ?? "team",
 		projectId: project.value.id,
+		approvalId: project.value.approvalId,
 		prompt: buildPrompt,
 		plan: approvedPlan,
     })
@@ -196,7 +208,16 @@ export function useAgentRun(token: () => string, workspaceId: () => string, onUs
     const candidate = raceCandidates.value.find((item) => item.id === candidateId)
     if (!candidate) throw new Error("找不到竞速候选")
     candidateSnapshot.value = candidate.snapshot
-    await commitCandidate(candidate.snapshot, projectPrompt.value, "race")
+    if (candidate.candidateId && candidate.snapshotHash && recovery.value?.phase === "race") {
+      recovery.value = await projectRepository.saveSnapshotRecovery(
+        project.value.id,
+        recovery.value.request,
+        candidate.snapshot,
+        0,
+        { candidateId: candidate.candidateId, snapshotHash: candidate.snapshotHash },
+      )
+    }
+    await commitCandidate(candidate.snapshot, recovery.value?.request.prompt ?? projectPrompt.value, "race")
     raceCandidates.value = []
   }
 
